@@ -1,0 +1,1 @@
+Tickle file to suppress subsequent calls home, it's safe to delete this file, but you may also want to set CALLHOME to FALSE in your config.php
