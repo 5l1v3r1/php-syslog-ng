@@ -1,0 +1,544 @@
+CHANGELOG
+
+2.9.8m
+- Changed msg parsing regex for cisco abbreviations (configurable by the config parameter CISCO_TAG_PARSE) to avoid issue 84.
+- Changed datetimepicker format for calendar to output a more international form.
+- Improved time regex validation.
+- Applied patch for issue 104.
+- Fixed 'Allowed memory size exhausted' when reloading cache (see issue 86).
+- Changed type for id column from mediumint to bigint unsigned. Also made seq column unsigned.
+    You can do the following procedure if you wish to update your current table structure and minimize downtime:
+	DROP TABLE all_logs;
+	Create a templog table with the new structure (see the create statement at html/install/sql/dbsetup.sql)
+	ALTER TABLE logs RENAME oldlogs;
+	ALTER TABLE templog RENAME logs;
+	INSERT logs (host,facility,priority,level,tag,datetime,program,msg,seq,counter,fo,lo) select 
+	host,facility,priority,level,tag,datetime,program,msg,seq,counter,fo,lo from oldlogs;
+	DROP TABLE oldlogs; (if everything went well)
+  
+    For the rest of log tables, you can just run this query for each log table:
+	ALTER TABLE logsYmd MODIFY id bigint unsigned not null auto_increment, MODIFY seq bigint unsigned;
+
+2.9.8k
+- Fixed a few bugs that got introduced...
+
+2.9.8g
+* Update
+- Fixed Calendar (changed to a better date picker)
+- Changed SQL type for 'seq' in the database from auto_increment to int
+	to update your version just type:
+	ALTER TABLE logs MODIFY seq bigint(20);
+	from within mysql
+	NOTE: this will mess up your MERGE table, you must change it on all old tables as well and re-run logrotate.php to create a new ALL_LOGS table.
+
+- Fix for SqueezeDB not passing tables properly - Thanks Robin!
+  Email from Robin:
+  ###################
+ // CDUKES: Aug 7, 2008: Added for command line passing of tables
+$Tables = array();
+if ($argc > 1) {
+        foreach ($argv as $arg) {
+                if ($arg != $argv[0]) {
+                        $tableArray = get_logtables($dbLink);
+                        foreach($tableArray as $table) {
+                                if ($table == $arg) {
+                                        array_push($Tables, $arg);
+                                }
+                        }
+                }
+        }
+        if (!in_array($arg, $Tables)) {
+            echo "Error, $arg doesn't appear to exist\n";
+        }
+} else {
+        array_push($Tables, DEFAULTLOGTABLE);
+}
+
+Also, if you are interested in including it as a sample for the data based squeeze, here's the shell script I have evolved from your help:
+ 
+#!/bin/sh
+table="logs`date +%Y%m%d --date='4 days ago'`"
+php /srv/www/php-syslog-ng/scripts/SqueezeDB-v2.3.php $table >> /var/log/php-syslog-ng/squeeze.log
+mysqlcheck -usyslogadmin -psyslogadmin --optimize syslog $table >> /var/log/php-syslog-ng/squeeze.log
+echo "flush tables" | mysql -usyslogadmin -psyslogadmin syslog >> /var/log/php-syslog-ng/squeeze.log
+  ###################
+
+
+
+2.9.8f
+* Update
+- re-commented out the check for all_logs in reloadcache.php - it's not scaling properly on large systems. Also, I don't see the need for it since we're caching on ea
+ch log individually this way instead of relying on a massive search through a merge table.
+- Added Certificate Based Authentication by Miguel Tormo
+  Ref: http://code.google.com/p/php-syslog-ng/wiki/CertificateAuthentication
+
+2.9.8e
+* Update
+- Fix for lpdcache not detecting when SQZ was disabled
+  There's a .patch file in the scripts directory if you just want to run that against your 2.9.8d install
+  just run: patch -p0 < lpdcache.patch in the scripts/ directory
+
+2.9.8d
+* Update
+- Fix for tailresult not displaying columns correctly
+
+2.9.8c
+* Update
+- Forgot to include the new reloadcache.php
+- Fixed missing config.php.dist
+
+2.9.8b
+* Update
+- Forgot to include the new common_funcs.php
+
+2.9.8a
+* Updates/Enhancements
+- Added Front page graph for daily log count, enable/disable through config.php
+- Changed DEBUG in config.php from '0' to FALSE
+- Re-enabled SQL output on search results if DEBUG=TRUE
+- Added sql staments for Mysql 5.x users to fix problem with drop and alter commands (http://nms.gdd.net/index.php/Installation_Guide#Caveats)
+- Fixed javascript populate for "duplicates" field on search page
+- Fixed SqueezeDB issue where duplicate count was not updating properly (http://code.google.com/p/php-syslog-ng/issues/detail?id=70)
+- Added SQZ Savings calculation to search page (shows how much of a percentage the SqueezeDB script has saved overall - shows up next to the "Duplicates" dropdown as a percentage)
+- Altered graphit.php to show results based on SQZ if enabled.
+- Found and fixed a few more short tags  (http://code.google.com/p/php-syslog-ng/issues/detail?id=20&can=1&q=tag)
+- Modified SqueezeDB to handle large systems a little better - please read changes in scripts/SqueezeDB-v2.2.php
+- Fixed a bug in reloadcache.php that was trying to cache the merge table which slows reloadcache down considerably on large systems (
+  // Ref: http://code.google.com/p/php-syslog-ng/issues/detail?id=73
+- Changed the LPD graph to display numbers in a more readable manner (such as 2.4M instead of 2400000) (see blocks/graph-logs_per_day.php)
+- Added Caching for front page graphs for performance increase
+  Note: NEW FILE ADDED - ldpcache.php in the scripts directory which is called from reloadcache.php
+  Note2: This REQUIRES a change to your search_cache table:
+  ALTER TABLE search_cache MODIFY type enum('HOST','FACILITY','PROGRAM','LPD') default NULL
+- Added SQZ (fo,lo, counter) and LPD (LPD) columns to the install SQL file.
+- Fixed errors when CEMDB = OFF, REF: http://code.google.com/p/php-syslog-ng/issues/detail?id=68
+
+2.9.8 
+* Updates/Enhancements
+- Fix for tail sorting on facility fields:
+ add 
+ if (!$table) { $table = DEFAULTLOGTABLE; }
+ to line 80 of tailresult.php
+- Added 'addslashes' function to sql query cache inserts in common_funcs.php
+  // Ref: http://groups.google.com/group/php-syslog-ng-support/browse_thread/thread/eda3c96999889b47
+- Added Web Basic Auth to login for mod_auth_krb5 users
+  // Ref: http://code.google.com/p/php-syslog-ng/issues/detail?id=62
+- Removed search page option: Collapse Identical Messages (it never worked and is replaced by the squeezeDB functionality)
+- Added search page option for "Duplicates" - only shows up if 'SQZ_ENABLED = TRUE' in confg.php
+  This option allows you to search for any duplicate lines created by the SqueezeDB feature.
+- Removed CALLHOME, it was fairly useless :-)
+- Modified distribution tar in response to http://code.google.com/p/php-syslog-ng/issues/detail?id=66
+- Removed INSTALL_STEPS file and replaced with Wiki Page @ http://nms.gdd.net/index.php/Installation_Guide
+
+TODO:
+- Re-write SqueezeDB in PERL for faster processing and scalability.
+- Need testers for SqueezeDB to verify that we aren't generating false-positives.
+
+
+2.9.7 
+* Updates/Enhancements
+!!! IMPLEMENTED SqueezeDB.php file in scripts/ !!!
+- Be sure you add this to your CRON!
+NOTE: If you have a very large database (more than 10k rows in 5 minutes), it WILL NOT scale. 
+Next release I hope to have a more scalable solution in place.
+More info on this is at http://code.google.com/p/php-syslog-ng/issues/detail?id=47
+  Cron Entry for SqueezeDB:
+ */5 * * * * php /www/php-syslog-ng/scripts/SqueezeDB-v2.0.php >> /var/log/php-syslog-ng/squeezedb.log 
+
+   NOTE: Versions of php-syslog-ng 2.9.5d and below will need to alter the database to use this script
+   ALTER TABLE logs ADD counter INT NOT NULL DEFAULT 1;
+   ALTER TABLE logs ADD fo datetime default NULL;
+   ALTER TABLE logs ADD lo datetime default NULL;
+
+- Added LDAP Auth section for Microsoft AD
+- Added 'DEMO' to config.php to change login page notification of demo site
+- Added FO, LO, and Count fields for squeezdb implementation
+- Added config.php variable for calculating hostcount on search page
+- Fixed a bug in login.php that wasn't notifying you of a failed password auth (it just put you back to the login screen)
+- Fixed bug for missing TAIL_REFRESH_SECONDS from config.php on new installation (http://code.google.com/p/php-syslog-ng/issues/detail?id=51)
+- Added a small "callhome" feature includes/callhome.php to help me get an idea of demographics - enable or disable in config.php (CALLHOME) setting.
+- Fixed FO, LO and COUNT Sort fields (added logic for sorting) in regularresult.php
+- Split Program and MSG into two columns in both regularresult and tail
+- Fixed issue 20: "Parse error: syntax error, unexpected $end in" (http://code.google.com/p/php-syslog-ng/issues/detail?id=20)
+- Fixed issue 27: "Tab stops on login screen" (http://code.google.com/p/php-syslog-ng/issues/detail?id=27)
+- Fixed issue 28: "Back to search does not remember search criteria" (http://code.google.com/p/php-syslog-ng/issues/detail?id=28)
+- Implemented issue 31: Regex Enhancements (http://code.google.com/p/php-syslog-ng/issues/detail?id=31)
+- Fixed issue 33: "custom title for tail queries" (http://code.google.com/p/php-syslog-ng/issues/detail?id=33)
+- Fixed issue 35: "save post variables through login procedure" (http://code.google.com/p/php-syslog-ng/issues/detail?id=35)
+- Fixed issue 49: Path settings in some files (http://code.google.com/p/php-syslog-ng/issues/detail?id=49)
+- Fixed issue 51: "Tail reloads page many times in a second" (http://code.google.com/p/php-syslog-ng/issues/detail?id=51)
+- Fixed issue 52: "Parse error: syntax error, unexpected $end in" (http://code.google.com/p/php-syslog-ng/issues/detail?id=52)
+- Fixed issue 53: "Parse error: syntax error, unexpected $end in" (http://code.google.com/p/php-syslog-ng/issues/detail?id=53)
+- Fixed issue 54: "Parse error: syntax error, unexpected $end in" (http://code.google.com/p/php-syslog-ng/issues/detail?id=54)
+- Fixed issue 55: "Input validation error for Program" (http://code.google.com/p/php-syslog-ng/issues/detail?id=55)
+- Fixed issue 56: "Search Option SYSLOG PRIORITY - HTML failure" (http://code.google.com/p/php-syslog-ng/issues/detail?id=56)
+- Fixed issue 57: Error check for "tail" operation on anything other than the default log table (http://code.google.com/p/php-syslog-ng/issues/detail?id=57)
+
+
+2.9.6
+* Enhancements
+- Changed "DEFINE("TTF_DIR","/usr/share/fonts/truetype/msttcorefonts/");" in includes/jpgraph/jpg-config.inc
+- Modified logrotate.php to allow for better error handling of duplicate tables 
+- Also removed myisamchk since it was causing table crashes for people.
+- Added new performance testing tools to scripts/tests/ (see README in that directory for info)
+- Modified reloadcache to remove caching based off of MERGELOGTABLE only, it was redundant.
+- MODIFIED DATABASE TABLE "search_cache", please update your tables to this:
+------------------- BEGIN SQL MODIFICATION---------------------
+mysql> drop table search_cache;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> CREATE TABLE `search_cache` (`tablename` varchar(32) default NULL,`type` enum('HOST','FACILITY','PROGRAM') default NULL, `value` varchar(128) default NULL, `updatetime` datetime default NULL,   INDEX `type_name` (`type`,`tablename`) ) ENGINE=MEMORY;
+Query OK, 0 rows affected (0.01 sec)
+------------------- END SQL MODIFICATION---------------------
+- Note that I added a 'PROGRAM' field to the enum and changed the database engine to MEMORY.
+
+- Fixed broken links for Common Graphs (line wrap was breaking the url)
+- Fixed search criteria for "Today" graph (it was searching the MERGELOGTABLE instead of DEFAULTLOGTABLE which take a *long* time on large systems
+- Fixed small cosmetic bug in graph output (it was showing a count of total hosts, instead of a sum of total rows found for TopX)
+- Fixed minor cosmetic issues with graph results (displaying total rows in results_subheader, displaying topx on graph)
+- Implemented Regex search capabilities provided by bpkroth (Big thanks!)
+  http://code.google.com/p/php-syslog-ng/issues/detail?id=31
+ Changes as noted by bpkroth:
+ - Added a program list similar to hosts.
+ - Optional RegExp matching of hosts, programs, and messages
+ - If RegExp matching is not used, the host/program "like" fields will
+   accept comma or semicolon delimited lists of hosts to match
+ - A slight cosmetic change to the message input area so they line up.
+ - Results pages display the facility, program and host, as links for one click filtering.
+ - Results page headers allow you to adjust the results ordering via a link.
+ - Removed popups from messages that aren't found in CEMDB
+ - Date is only displayed if it's different from today
+ - Previously if $row['count'] > 1, CEMDB messages were never shown. This is fixed.
+ - Search page now uses $_SESSION variables to remember what you last entered into the form
+   so you can easily adjust the query rather than having to start over from scratch
+ - Added the ability to define the refresh rate of the tail page in config.php.
+   Make sure you configure your server to Allow overrides (AllowOverride Options)
+   Ref: http://us2.php.net/manual/en/configuration.changes.php
+
+2.9.5d
+* Minor fixes
+- Small bug fix
+
+2.9.5b
+* Minor fixes
+- Fixed Issue 36 (logrotate errors) http://code.google.com/p/php-syslog-ng/issues/detail?id=36
+  note that you need to re-grant priveleges (GRANT ALL PRIVILEGES on syslog.* to syslogadmin@'%';) to fix this.
+- Removed include from common_funcs for config.php and moved it to login.php
+  it was messing up the reloadcache.php
+- Fixed issue #45 (unable to use "ACL = FALSE" in config.php)
+  http://code.google.com/p/php-syslog-ng/issues/detail?id=45
+
+
+2.9.5a
+* Minor fixes
+- Added a .htaccess file to check for proper php global settings 
+- note that you must set "AllowOverride All" in your apache config to allow .htaccess to work.
+- Modified the regex match for cemdb stuff in tailresult and 
+  regularresult on incoming syslog messages to make it look better
+- removed a couple of old files
+
+2.9.5
+* Lots of code changes
+- Sorry...no upgrade for this one...I screwed up and used 2.9.3l as the base :-)
+  However, there are no database changes, so you *should* be able to just copy over your current html/ directory
+- Modified UMS to include LDAP Authentication
+- New login/logout screen and procedures
+- Fixed user ACL check (it only allowed the "admin" user to modify acl's before)
+- Fixed php short_open_tag issue: http://code.google.com/p/php-syslog-ng/issues/detail?id=32
+- Added fix for issue #36 (logrotate failures) http://code.google.com/p/php-syslog-ng/issues/detail?id=36
+- Applied patch for issue #43 (addcslashes) http://code.google.com/p/php-syslog-ng/issues/detail?id=43
+- Removed top information bar showing fairly useless information such as user's IP address.
+  per request from http://code.google.com/p/php-syslog-ng/issues/detail?id=25
+- Added a new favicon.ico and png under images/
+- Fixed installer to import CEMDB better and faster
+- Reduced install size by quite a bit since the cemdb is now gzipped.
+- Did a whole bunch of other things I'm probably forggetting :-0
+- Added a paypal link :-)
+
+2.9.4
+* New and improved CEMDB (yay!)
+- Added note in troubleshooting doc about setting magic quotes to "on"
+- Updated CEMDB with new data (about twice as many messages now!)
+- Note that this required a change to the CEMDB.class.php file!
+- added the "upgrades/" directory so folks could just patch to new versions. 
+  (note that you will need to manually install the new CEMDB if you use this method,
+  it's located in html/install/sql/cemdb.sql)
+  To manually install the new CEMDB:
+  1. Backup old sql:
+  mysqldump syslog cemdb > cemdb.old.sql
+  2. Delete old data from database:
+  echo "delete from cemdb" | mysql -usyslogadmin -psyslogadmin syslog
+  3. Import new data:
+  mysql syslog < html/install/sql/cemdb.sql
+  4. Apply upgrade patch:
+  patch -p0 < upgrades/2.9.3l_to_2.9.4.patch
+  # That should do it, if not, you may need to just re-run the install by zeroing out your config.php file
+- Made changes to the way syslog-ng stores its data into mysql (changing the syslog-ng.conf file)
+- Thanks go to Michael Baeker for this one!
+- Reference: http://www.baecker.com/linux/syslog-ng-in-mysql-datenbank-loggen.html
+- These changes no longer require the use of pipes so you'll want to remove:
+  "@reboot /www/php-syslog-ng/scripts/syslog2mysql.sh >> /var/log/php-syslog-ng/mysql.log 2>&1"
+  From your crontab file (crontab -e to edit the file) after making the changes to syslog-ng.conf.
+  Be sure to replace the username and password in the new syslog-ng.conf with the proper credentials.
+
+2.9.3l
+* Various fixes
+- Added chk_config to index.php to redirect to install screen if config.php is missing settings
+- Added check to common_funcs for proper PHP settings 
+- Changed function perform_query to do better error handling - added mysql_error() 
+- Changed JS to 'JS' in login.php (:%s/JS/'JS'/g)
+- fixed missing $add variable in common_funcs.php
+- Added .htaccess to make sure register_globals and magic_quotes_gpc were enabled for this site (not necessary globally in php.ini)
+- Added somewhat better login handling to login.php
+
+2.9.3k
+- Fixed improper check for $username in login.php (removed pointless code)
+
+2.9.3j
+* Various Updates/fixes
+- Applied cosmetic fix for JS definition missing from g_redirect function (http://code.google.com/p/php-syslog-ng/issues/detail?id=24)
+- Included configure.php fix for issue 1 (http://code.google.com/p/php-syslog-ng/issues/detail?id=1)
+- Changed all php shorthand echo's (in the includes directory) to longhand (http://code.google.com/p/php-syslog-ng/issues/detail?id=20)
+- Applied fix for logrotate.php (http://code.google.com/p/php-syslog-ng/issues/detail?id=21)
+- Added check for magic quotes to resolve issue 16 (http://code.google.com/p/php-syslog-ng/issues/detail?id=16)
+- Moved version information from the html_header to about.php
+- Cleaned up about.php and appended CHANGELOG info.
+
+2.9.3i
+* Ugh
+- The patch supplied for CEMDB (http://code.google.com/p/php-syslog-ng/issues/detail?id=19)
+  display threw an error on my test server, so I changed:
+//if (preg_match("/%[:alpha:].*:/", $row['msg']) == 0) {
+if (preg_match("/%[[:alpha:]]+$/", $row['msg']) == 0) {
+in regularresult.php
+
+
+2.9.3h
+* Minor updates
+- Applied CEMDB display patch from Sergio Guzman (http://code.google.com/p/php-syslog-ng/issues/detail?id=19)
+- Applied speed increase posted by patrickdk77 (http://code.google.com/p/php-syslog-ng/issues/detail?id=17)
+- Applied PHP Notices patch from emmanuel.crespy (http://code.google.com/p/php-syslog-ng/issues/detail?id=18)
+
+2.9.3g
+* Applied some fixes posted on the Google Code site
+- http://code.google.com/p/php-syslog-ng/issues/detail?id=14
+- http://code.google.com/p/php-syslog-ng/issues/detail?id=15
+- Created INSTALL-STEPS for step-by-step installation instructions
+
+2.9.3f
+* Minor update
+- Removed reference to Google Analytics (which I use on my server)
+- If you want to use it, just create a file called "includes/google-analytics.html" and add:
+	<script src="http://www.google-analytics.com/urchin.js" type="text/javascript">
+	</script>
+	<script type="text/javascript">
+	_uacct = "ACCTNUMBER";
+	urchinTracker();
+	</script>
+(Replace ACCTNUMBER with your analytics account number)
+
+2.9.3e
+* Minor fix to my previous minor fix :-)
+- After converting the eol characters to carriage returns, it had placed an extra ^M at the bottom of common_funcs.php
+  (after the last ?>) which causes headers to get messed up in php and throw a "headers already sent" error.
+  
+2.9.3d
+* Minor Fix
+- It appears that includes/common_funcs.php was missing eol characters...
+
+
+2.9.3c
+* Minor fixes
+- Changed path to config.php in scripts/drop-old-tables.php
+- Restored config.php.dist (it was empty)
+- Made some minor changes to scripts/resetusers.sh
+
+2.9.3b
+* Minor fixes
+- zero'd out config.php to allow the installer to run
+- Added memory fix to the TROUBLESHOOTING-INSTALL doc:
+
+2.9.3a
+* Minor fixes to 2.9.3
+- Increased minimum memory requirements from 64M to 128M
+- Removed duplicate table creation of the cemdb table from the install gui 
+  (2.9.3 made a change to it and I mistakenly created the table twice instead of replacing it)
+- Had to replace cemdb.sql from Daniel Berlin <mail@daniel-berlin.de> with the old one. 
+  The new one was preventing the installer from working properly...not sure why.
+  The new one from him has been renamed to "cemdb.dberlin" in the install/sql directory
+  Once the web install completes, you can load the newer format by doing the following:
+  # echo "delete from cemdb;" | mysql syslog
+  # mysql -u<user> -p syslog < cemdb.dberlin 
+  replace "<user>" and "syslog" accordingly.
+  I don't know why his imports fine from the command line but fails during the install. 
+  Anyone wanna take a crack at it?
+- Added "resetusers.sh" into the scripts directory. This script will 
+  DELETE ALL USERS and add the username/passwords for "admin/admin" and "demo/demo"
+
+
+2.9.3
+* Minor fixes included from Daniel Berlin <mail@daniel-berlin.de>
+- Issue # 8 patched (http://code.google.com/p/php-syslog-ng/issues/detail?id=8&can=1&q=)
+- Fixed missing field in emd.pl (Cisco Error Message Database)
+  Notes from Daniel:
+  The current version fails to extract the 'message' field
+  (3rd field, see below):
+ Generated by old emd.pl >>>
+  78836,'%C4K_POWERSHELF-3-INVALIDPACKETRECEIVED','ARRAY(0xc54eba0)','This
+  message indicates that the GCP protocol stack has received a packet of
+  an unexpected type. This is a transient error condition; the protocol
+  might recover automatically on the next discovery cycle.','This is an
+  informational message only. No action is required.','2006-07-03 15:53:41')
+ <<<
+ Generated by new emd.pl >>>
+  C4K_POWERSHELF-3-INVALIDPACKETRECEIVED
+  (3006, '%C4K_POWERSHELF-3-INVALIDPACKETRECEIVED', 'We got an invalid
+  packet', 'This message indicates that the GCP protocol stack has
+  received a packet of an unexpected type. This is a transient error
+  condition; the protocol might recover automatically on the next
+  discovery cycle.', 'This is an informational message only. No action is
+  required.', '2007-02-14 14:56:17')
+ <<<
+- Daniel added a new Class for CEMDB lookups (CEMDB.class.php)
+  It caches entries already looked up in the cem database
+  and results in much less database load.
+  E.g. If there are 10 messages like this one:
+  %AAA-3-IPILLEGALMSG: Fan 1 had a rotation error reported.
+  %AAA-3-IPILLEGALMSG: Fan 2 had a rotation error reported. 
+- Removed the jpgraph docs and examples (which saves ~6MB 
+  and does not change jpgraph's behavior)
+  i.e.:
+  html/includes/jpgaph/Examples
+  and
+  html/includes/jpgaph/docs
+
+ 
+2.9.2a(r14)
+* Minor fixes included from Tom Cort <linuxgeek@gmail.com>
+- php-syslog-ng-2.9.2a-r13-check-exec-mem-limits.patch - when I was
+  using the installer with the load cemdb and load sample data options I
+  was getting maximum execution time exceeded and allowed memory size
+  exhausted errors. This patch adds those checks to the first page of
+  the installer.
+
+- php-syslog-ng-2.9.2a-r13-install-index-html.patch - an HTML tag wasn't
+  closed properly, this fixes it.
+
+- php-syslog-ng-2.9.2a-r13-suppress-warnings.patch - php-syslog-ng
+  prints a warning when there are database problems. mysql_pconnect and
+  mysql_connect print warnings too. The patch suppresses the warnings
+  that mysql_pconnect and mysql_connect spit out.
+
+**** IMPORTANT (really all of this is, it's why it's here...)***
+- Moved the html/scripts directory to ../ (so that it would not be web accessible)
+- Added Mysql.pm in scripts/ which resolves a bug in Net::MySql and MySql 5.x
+
+2.9.2a(r13)
+* Minor bugfixes
+- Fixed Logrotate.php bug
+- F. Leimbach - Add logic to remember the requested query throughout a login
+  Made a few changes to this (including allowing the same for the Tail function)
+- Added user guide (Word Doc)
+- Added check to see if config.php was filled in and redirect to install if not.
+- Enhancements made to dbgen.pl so that I could use it with cron.
+
+2.9.2a
+* Minor bugfixes
+- added htmlentities filter to $info in regularresult and tailresult since some messages contained odd characters in the CEMDB.
+- Changed setcookie function - it was doing some weird timeout stuff
+
+2.9.2
+* Uh, lot's of changes...I really should have updated this file and didn't -- shame on me.
+- I did add a lot of info to the readme though --- please be sure to read that.
+
+
+2.8
+* Fixed a bug in logrotate.php (http://sourceforge.net/mailarchive/forum.php?thread_id=7674217&forum_id=34099).
+
+2.7
+* Fixed some more issues with undeclared variables 
+  (http://sourceforge.net/mailarchive/forum.php?thread_id=7433359&forum_id=34099
+  and 
+  http://sourceforge.net/mailarchive/forum.php?thread_id=7568291&forum_id=34099).
+- Fixed problem when passing arrays through POST or GET requests and running PHP without 
+  having magic quotes enabled (http://sourceforge.net/mailarchive/forum.php?thread_id=7568291&forum_id=34099).
+- Fixed a bug in the page counter at the bottom of the regularresult.php 
+  page. The count was incorrect when you moved past page five.
+- Changed the CREATE statement for the merge table in logrotate.php because it failed 
+  on some systems (it should now work on any version of MySQL 4.0.18 or later).
+- Changed logrotate.php to drop the temp table if it exists (it could 
+  possibly be created during a failed run and then the script would fail on all subsequent runs).
+
+2.6
+* More code clean-up and commenting.
+- Added an error message on failed login.
+- Did some work towards supporting other databases.
+- Option to reset other users' passwords.
+- Cache function for the search page.
+- Access controls. The access controls currently only affects various configuration specific items (add/deleting users, changing the access control settings etc).
+- Changed the database field on the search page so that you only have to pick a table if you have more than one table.
+- Fixed bug in get_logtables() (http://sourceforge.net/mailarchive/forum.php?thread_id=7433359&forum_id=34099).
+- Fixed issue with persistent MySQL connections. db_connect_syslog() now only uses mysql_pconnect() if it is available.
+- Fixed issue with undeclared variables. Some versions of PHP produce 
+  lots of errors/warnings/notices when variables are not declared before they are used.
+
+
+2.5.4
+* More code clean-up and commenting.
+- Added authentication. It can be enabled by setting REQUIRE_AUTH in config.php. 
+  Authentication also requires a new table and a create statement was added to the 
+  dbsetup.sql script. For authentication to work you also need to run the new GRANT 
+  statement for the regular user (GRANT UPDATE ON syslog.users TO sysloguser@localhost;). 
+  You should also add a user so that you are able to log in (you can add more users once you are logged in). 
+  INSERT INTO users (username, pwhash) VALUES('admin', 'd033e22ae348aeb5660fc2140aec35850c4da997'); 
+  will add a user 'admin' with password 'admin'.
+- Added a new field to the search page. If you have multiple tables with log data then 
+  you will get a dropdown where you can select what table to search. Unless you only 
+  have one table or have a merge table that covers all tables then you have to pick a 
+  table to work with before the rest of the form is displayed.
+- Changed the logrotate.php script to handle merge tables. This feature can be turned 
+  on and off using MERGELOGTABLE in config.php. When active then the logrotate.php will 
+  create a merge table covering all log tables whenever it's run. In order for this change 
+  to work you need to allow the admin user to have RELOAD priviliges. 
+  GRANT RELOAD ON *.* TO syslogadmin@localhost; will take care of that. 
+  You should not attempt to run the logrotate script more than once per day.
+- Changed the logrotate.php script to enable deleting outdated tables. This 
+  feature can be turned on and off using LOGROTATERETENTION in config.php. 
+  LOGROTATERETENTION specifies the number of days to keep old logs. Log tables with a 
+  datestamp older than today minus LOGROTATERETENTION will be deleted whenever logrotate.php is run.
+- Fixed a bug that caused the exclude option for PRIORITY to malfunction 
+  (http://sourceforge.net/mailarchive/forum.php?thread_id=7376135&forum_id=34099).
+- Fixed a bug that could result in collapsing identical messages from different hosts into one message.
+- Included a help page. If the database is unavailable then this page is the default page.
+- A few cosmetic changes to the user interface.
+- Implemented input validation for almost all input.
+
+2.5.3
+* Complete top-to-bottom clean-up of the code including large parts that were re-written.
+- Simplified much of the HTML ... but tried to stay true to the original look.
+- Changed the way the total number of results is calculated. My approach requires 
+  MySQL 4.0 or later. This way you can use a LIMIT statement and still get the total 
+  number of potential results if you had not used LIMIT. Also implemented an option to 
+  turn off this feature if using older versions of MySQL (no count will be displayed on 
+  older versions of MySQL).
+- Changed the list of result pages. It lists links to the 11 closest pages and adds 
+  FIRST, PREV, NEXT and LAST links. This only works correct when you have a total row 
+  count but limited functionality is offered for MySQL 3.x users (First, Prev and Next links).
+- The max-limit input variable is probably mostly useless now so it was removed.
+- Added sorting by column (seq, facility, severity, datetime).
+- Changed the way to and from times/dates are handled. A blank date field indicates any date. 
+  And if a date is entered and no time is specified then 00:00:00 is used for the FROM 
+  time and 23:59:59 is used for the TO time. Entering a time without a date results in 
+  the time being ignored.
+- 'now', 'today' and 'yesterday' are valid values for the date inputs on the search page (now and today are the same).
+- 'now' is valid value for the time inputs on the search page.
+- Did some prep work to allow an arbitrary number of inputs when searching for specific messages.
+- The hostname link on the result page (for both the regular result and the 
+  tail result) narrows down the search to only include that particular host.
+- The results in the tail script can be narrowed down using many of the same variables as the regular search result.
+- MySQL functions that include basic database error handling.
+- Added a button on the search page to go straight to the tail result page.
+- Added an option to collapse consecutive lines with identical messages into one line.
+- Included some sample scripts for setup etc (create database and database users, 
+  logrotate, syslog to mysql).
+# END

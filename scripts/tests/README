@@ -1,0 +1,27 @@
+# Tests
+# The loggen program is from syslog-ng. You can use it to insert large amounts of data for testing
+# More info here: http://bazsi.blogs.balabit.com/2007/12/syslog-ng-fun-with-performance.html
+# 
+# The generate-logs.sh is just a sample shell file to show you how to run loggen
+#
+# The  find_missing_sequences.pl file can be run after inserting data using loggen to see if any sequences were missed.
+# Note that you *should* run loggen from a remote system to truly test this since you would want to include any potential ethernet drops.
+#
+#
+# Sample process:
+# 1. copy "loggen" to another linux host
+# 2. from that host, run:
+#
+# # The following command will generate:
+# # 50 messages per second
+# # using TCP stream
+# # for one minute (60 seconds)
+# # on port 5000 (check /etc/syslog-ng.conf to make sure it's listening)
+# # to the "loghost" server (make an /etc/hosts entry or replace with the IP address)
+#
+# ./loggen -r 50 -S --interval 60 loghost 5000
+#
+# Finally, run:
+# ./find_missing_sequences.pl
+# to find any missing sequences.
+# According to Bazsi, you should be able to get 68,000 messages per second which is essentially wire speed (100Mb)

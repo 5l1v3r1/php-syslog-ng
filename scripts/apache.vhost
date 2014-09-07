@@ -1,0 +1,30 @@
+# PHP-SYSLOG-NG
+<VirtualHost *>
+    ServerName php-syslog-ng.gdd.net
+    ServerAlias php-syslog-ng.gdd.net *.php-syslog-ng.gdd.net
+    ServerAdmin cdukes
+
+    DocumentRoot /www/php-syslog-ng/html
+    <Directory />
+        Options FollowSymLinks
+        AllowOverride All
+    </Directory>
+    <Directory /www/php-syslog-ng/html>
+        # pcw No directory listings
+        # Options Indexes FollowSymLinks MultiViews
+        Options -Indexes FollowSymLinks MultiViews
+        AllowOverride All
+        Order allow,deny
+        allow from all
+    </Directory>
+
+    ErrorLog /var/log/apache2/php-syslog-ng/error.log
+
+    # Possible values include: debug, info, notice, warn, error, crit,
+    # alert, emerg.
+    LogLevel warn
+
+    CustomLog /var/log/apache2/php-syslog-ng/access.log combined
+    ServerSignature On
+
+</VirtualHost>

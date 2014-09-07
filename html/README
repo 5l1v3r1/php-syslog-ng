@@ -1,0 +1,119 @@
+*** IMPORTANT ***
+Please READ this and the CHANGELOG document, it has some important stuff too :)
+******************
+
+To install, just browse to http://<url>/install
+Now, if you go right to doing this without reading this and the changelog, you are totally on your own.
+(you might also want to look at TROUBLESHOOTING-INSTALL if you have problems)
+
+/*********************************************************************/
+Release notes for php-syslog-ng 2.9.1:
+I've taken the 2.8 version, fixed a few bugs/annoyances and added an install interface.
+To use the installer, just create an empty (writeable) config.php in the config/ directory and point
+your browser to http://yourserver/install
+
+I've also added a perl script to generate fake events located at scripts/dbgen.pl
+
+Added the Cisco Error Message Database (CEMDB)
+ - The CEMDB includes a MySQL table of all cisco errors available (~25k entries).
+ - It will automatically display more information about any Cisco-based event that comes in.
+ - Note that you must have javascript enabled for this to display.
+To enable this feature, your config file requires two entries:
+define('CEMDB', 'ON');
+define('CISCO_ERROR_TABLE', 'cemdb');
+These entries are created if you use the installer.
+
+I'm including the dumpfile for the CEMDB stuff - it can be found in install/sql/cemdb.sql
+Note that scripts/cemdb/* is not needed, it's there for future updates of the cemdb.
+All you need is the cemdb.sql file in the install directory.
+* You may want to GZIP this file to save space, I'm leaving it uncompressed to the installer can use it
+* Someone should write code to automatically uncompress and compress it as needed using the installer
+* (I may if I have time)
+
+- Clayton Dukes
+- Lot's-o-props to Michael Freeman for his help on the emd.pl script! (mfreeman451@gmail.com)
+/*********************************************************************/
+
+/*********************************************************************/
+* Release notes for php-syslog-ng 2.9.2:
+* NEW CONFIG - If you are not using the install utility provided, please note that the 
+* config/config.php file has changed -- see config.php.dist for an example.
+/*********************************************************************/
+- Lot's of minor fixes to 2.9.1
+- Added Graphing capability on the main page
+- To enable/disable Graphs, modify config.php
+ * Be sure to create a cache directory (jpcache is the default) and make it writeable by the web user.
+ * You may also want to add a cronjob to clean out the cache on a daily basis, like so:
+ @daily find /path/to/web/directory/html/jpcache -atime 1 -exec rm -f '{}' ';'
+ * This will delete files in that directory older then 1 day
+- Note: If you see an error about a missing font, the be sure to install the MS ttf's (verdana.ttf). In Ubuntu, just type "aptitude install msttcorefonts", other OS's, please read http://www.mail-archive.com/php-syslog-ng-support@lists.sourceforge.net/msg00126.html
+- Please read more about JPGraph here:
+ http://www.aditus.nu/jpgraph/pdf/jpgraphddda.pdf
+ Specifically, please note that it required GD libs to run!
+- The full JPGRAPH library is included with this distribution located under includes/jpgraph
+  It is the standard download - no modifications have been made to the source.
+
+
+- Changed the size of host tables in the database from varchar(32) to varchar(128) -- my customer has *really* long dns names and they were getting truncated.
+ To modify your installation, do the following from mysql:
+ * alter table logs modify host varchar(128) default NULL; 
+ * alter table search_cache modify value varchar(128) default NULL; 
+ Then, be sure to clear your search cache:
+ * delete from search_cache;
+
+- Changed default searches to include only yesterday to today. In other words, if you leave the date fields blank on the main page and click search, it will only search from yesterday until today, not everything. I did this because users at my client site would just click search without selecting anything just to see what it does and then complain that it was slow :-)
+ * To do this, I just modified regularresult.php and changed the following:
+ $date = get_input('date'); 
+ if (! $date) { 
+ $date = "yesterday"; 
+ }   
+ $date2 = get_input('date2'); 
+ if (! $date2) { 
+ $date = "today"; 
+ }   
+
+- A couple of people have asked how to create a password for the admin manually through the DB interface, here's how:
+ insert into users (username, pwhash) values ('admin', MD5("somepassword"));
+
+- Modified reloadcache.php and added:
+ $basePath = dirname( __FILE__ );
+ include_once "$basePath/../includes/common_funcs.php";
+ include_once "$basePath/../config/config.php";
+ So that I could run a cron job every 5 minutes to update the cache:
+ 0,5,10,15,20,25,30,35,40,45,50,55 * * * * php /www/php-syslog-ng/html/scripts/reloadcache.php >> /var/log/reloadcache.log
+
+- Modified dbgen.pl and made it more random -- including random hosts now.
+  * Also cleaned up the code some in it.
+
+- Modified scripts/syslog2mysql.sh so that it uses syslogadmin instead of syslogfeeder (I don't see a need for a separate syslogfeeder account)
+
+- Modified many of the files to use $basePath parameter instead of relative paths
+$basePath = dirname( __FILE__ );
+include_once "$basePath/../includes/common_funcs.php";
+include_once "$basePath/../config/config.php";
+
+- Modified META refresh tags on login and logout to use JS instead of META since it's faster and doesn't try to modify header information.
+
+- Overlib (javascript popup)
+You guys are more than welcome to make it better if you like.
+The javascript being used is from overLIB
+3.51(http://www.bosrup.com/web/overlib)
+Yes, I am aware there are later version available, but this version is
+much smaller and easier to use (but sacrifices more features).
+
+/*********************************************************************/
+/* The scripts directory contains some sample scripts that can be    */
+/* used to set up all the pieces needed by php-syslog-ng. Make sure  */
+/* you edit those scripts to match your environment before using     */
+/* them.                                                             */
+/*********************************************************************/
+ * General *
+php-syslog-ng is licensed under the terms of the GNU Public License (GPL) Version 2 as published by the Free Software Foundation. This gives you legal permission to copy, distribute and/or modify php-syslog-ng under certain conditions. Read the 'LICENSE' file in the php-syslog-ng distribution or read the online version of the license for more details. php-syslog-ng is provided AS IS with NO WARRANTY OF ANY KIND, INCLUDING THE WARRANTY OF DESIGN, MERCHANTABILITY, AND FITNESS FOR A PARTICULAR PURPOSE.
+
+Release notes for php-syslog-ng 2.7:
+This release only contains bug fixes. See the changelog for the complete list of changes.
+If you are using the merge table then you need to use MySQL 4.0.18 or later.
+
+-Claus
+
+# END

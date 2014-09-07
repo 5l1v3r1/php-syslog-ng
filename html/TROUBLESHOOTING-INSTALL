@@ -1,0 +1,37 @@
+/ ** General Installation Issues **/
+
+- MAKE SURE YOU SET YOUR PHP.INI file to these minimum specifications:
+max_execution_time = 300     ; Maximum execution time of each script, in seconds
+max_input_time = 120 ; Maximum amount of time each script may spend parsing request data
+memory_limit = 128M      ; Maximum amount of memory a script may consume (8MB)
+
+- If you get: "Error in perform_query function: No DB link"
+when accessing http://URL/install, then zero out your config.php file by doing:
+echo " " > config/config.php
+Make sure the files still exists and is writeable though or the installer won't work properly.
+
+- If you see something similar to:
+  Fatal error: Allowed memory size of 8388608 bytes exhausted (tried to allocate 10191457 bytes) in 
+  /www/install/install2.php on line 161
+  Then it means you haven't set your php_ini memory_limit parameter to >= 128M
+
+- Note: If you see an error about a missing font, the be sure to install the MS ttf's (verdana.ttf). 
+In Ubuntu, just type "aptitude install msttcorefonts"
+Other OS's, please read http://www.mail-archive.com/php-syslog-ng-support@lists.sourceforge.net/msg00126.html
+- Please read more about JPGraph here:
+ http://www.aditus.nu/jpgraph/pdf/jpgraphddda.pdf
+ Specifically, please note that it requires GD libs to run!
+
+- If you get an error using the dbgen.pl script such as "send: Cannot determine peer address at /usr/local/share/perl/5.8.8/Net/MySQL.pm" then use the MySQL.pm file located in the scripts directory (this is known bug for Net::MySql 0.09 and > Mysql 5.x)
+Ref: http://rt.cpan.org/Public/Bug/Display.html?id=21462
+
+- If you get an error like this:
+Parse error: parse error, unexpected T_STRING, expecting
+T_OLD_FUNCTION or T_FUNCTION or T_VAR or '}' in /var/www/html/syslog/
+includes/CEMDB.class.php on line 11
+Then chances are your using PHP v4 which doesn't like the syntax on the CEMDB.class file.
+You can get a v4 class file from:
+http://code.google.com/p/php-syslog-ng/issues/detail?id=13
+
+# END
+

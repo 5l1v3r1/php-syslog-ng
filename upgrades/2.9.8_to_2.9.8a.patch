@@ -1,0 +1,3793 @@
+diff -Nur -Nur php-syslog-ng/html/CHANGELOG php-syslog-ng.2.9.8a/html/CHANGELOG
+--- php-syslog-ng/html/CHANGELOG	2008-05-10 15:16:45.000000000 -0400
++++ php-syslog-ng.2.9.8a/html/CHANGELOG	2008-08-07 19:24:30.000000000 -0400
+@@ -1,5 +1,27 @@
+ CHANGELOG
+-2.9.8 (Beta)
++2.9.8a
++* Updates/Enhancements
++- Added Front page graph for daily log count, enable/disable through config.php
++- Changed DEBUG in config.php from '0' to FALSE
++- Re-enabled SQL output on search results if DEBUG=TRUE
++- Added sql staments for Mysql 5.x users to fix problem with drop and alter commands (http://nms.gdd.net/index.php/Installation_Guide#Caveats)
++- Fixed javascript populate for "duplicates" field on search page
++- Fixed SqueezeDB issue where duplicate count was not updating properly (http://code.google.com/p/php-syslog-ng/issues/detail?id=70)
++- Added SQZ Savings calculation to search page (shows how much of a percentage the SqueezeDB script has saved overall - shows up next to the "Duplicates" dropdown as a percentage)
++- Altered graphit.php to show results based on SQZ if enabled.
++- Found and fixed a few more short tags  (http://code.google.com/p/php-syslog-ng/issues/detail?id=20&can=1&q=tag)
++- Modified SqueezeDB to handle large systems a little better - please read changes in scripts/SqueezeDB-v2.2.php
++- Fixed a bug in reloadcache.php that was trying to cache the merge table which slows reloadcache down considerably on large systems (
++  // Ref: http://code.google.com/p/php-syslog-ng/issues/detail?id=73
++- Changed the LPD graph to display numbers in a more readable manner (such as 2.4M instead of 2400000) (see blocks/graph-logs_per_day.php)
++- Added Caching for front page graphs for performance increase
++  Note: NEW FILE ADDED - ldpcache.php in the scripts directory which is called from reloadcache.php
++  Note2: This REQUIRES a change to your search_cache table:
++  ALTER TABLE search_cache MODIFY type enum('HOST','FACILITY','PROGRAM','LPD') default NULL
++- Added SQZ (fo,lo, counter) and LPD (LPD) columns to the install SQL file.
++- Fixed errors when CEMDB = OFF, REF: http://code.google.com/p/php-syslog-ng/issues/detail?id=68
++
++2.9.8 
+ * Updates/Enhancements
+ - Fix for tail sorting on facility fields:
+  add 
+diff -Nur -Nur php-syslog-ng/html/config/config.php php-syslog-ng.2.9.8a/html/config/config.php
+--- php-syslog-ng/html/config/config.php	2008-05-10 15:42:15.000000000 -0400
++++ php-syslog-ng.2.9.8a/html/config/config.php	2008-08-07 17:11:54.000000000 -0400
+@@ -1 +1 @@
+-
++ 
+diff -Nur -Nur php-syslog-ng/html/config/config.php.dist php-syslog-ng.2.9.8a/html/config/config.php.dist
+--- php-syslog-ng/html/config/config.php.dist	2008-03-20 22:00:00.000000000 -0400
++++ php-syslog-ng.2.9.8a/html/config/config.php.dist	2008-08-07 17:11:45.000000000 -0400
+@@ -1,9 +1,9 @@
+ <?php
+ define('PAGETITLE', 'Php-Syslog-NG' );
+-define('VERSION', '2.9.6a(beta)');
++define('VERSION', '2.9.8a');
+ define('COUNT_ROWS', TRUE);
+-define('MERGELOGTABLE', 'all_logs');
+ define('DEFAULTLOGTABLE', 'logs');
++define('MERGELOGTABLE', 'all_logs');
+ define('USETABLE', DEFAULTLOGTABLE); // This tells the main page to calculate hostcount based on "all_logs" or "logs"
+ define('LOGROTATERETENTION', 30);
+ define('DBUSER', 'sysloguser');
+@@ -28,10 +28,14 @@
+ define('ADMINEMAIL', 'cdukes@cdukes.com');
+ define('CEMDB', 'ON');
+ define('CISCO_ERROR_TABLE', 'cemdb');
+-define('DEBUG', '0');
++define('DEBUG', FALSE);
+ define('SITEURL', '/');
+ $regExpArray = array(
+-			"username"=>"(^\w{4,}\$)",
++		   	// "username"=>"(^\w{4,}\$)",
++		   	// Cdukes - 05/10/08: Modified username to allow email address as username
++		   	// This is an enhancement change for
++		   	// http://code.google.com/p/php-syslog-ng/issues/detail?id=62
++		   	"username" => "(^[A-Za-z_.@]{4,}\$)",
+ 			"password"=>"(^.{4,}\$)",
+ 			"pageId"=>"(^\w+$)",
+ 			"sessionId"=>"(^\w{32}\$)",
+@@ -56,7 +60,10 @@
+ 			"programRegExp"=>"(^\S+$)",
+ 			/* END: changes by BPK to allow for regexp matching, lists of hosts, and programs */
+ 			"facility"=>"(^\w+$)",
+-			"priority"=>"/^debug$|^info$|^notice$|^warning$|^err$|^crit$|^alert$|^emerg$/i",
++		   	"priority"=>"/^debug$|^info$|^notice$|^warning$|^err$|^crit$|^alert$|^emerg$/i",
++		   	// Cdukes - 05/10/08: Below is an enhancement addition for SqueezeDB duplicate searching
++		   	"dupop"=>"(^lt|gt|eq$)",
++		   	"dupcount"=>"(^\d+$)",
+ 			);
+ //------------------------------------------------------------------------
+ // CDUKES - BEGIN jpgraph Addon
+@@ -98,7 +105,6 @@
+ // Required when if LDAP_MSAD set to YES and using MS Active Directory, ex. mydomain.com
+ define('LDAP_DOMAIN', "mydomain.com");
+ 
+-
+ // privilege levels for editing records 
+ // (not implemented yet - this will be used to define RW and RO groups from LDAP)
+ // use privilege level authentication for record editing?
+@@ -115,15 +121,25 @@
+ // If you don't want it on the menu bar, just disable it here :-)
+ //------------------------------------------------------------------------
+ define  ('PAYPAL_ENABLE', 'YES');
+-
+ //------------------------------------------------------------------------
+ // CDUKES - Just a simple addition for my demo site at http://php-syslog-ng.gdd.net
+ //------------------------------------------------------------------------
+ define  ('DEMO', TRUE);
++// Cdukes - 05/10/08: WEBBASIC_ENABLE
++// This is an enhancement change for
++// http://code.google.com/p/php-syslog-ng/issues/detail?id=62
++define('WEBBASIC_ENABLE', FALSE);
++// Cdukes - 05/10/08: SQZ_ENABLED
++// This is an enhancement change for SqueezeDB functionality
++// http://code.google.com/p/php-syslog-ng/issues/detail?id=47
++define('SQZ_ENABLED', TRUE);
+ 
+ //------------------------------------------------------------------------
+-// CDUKES - Call home feature so I can see how many people are using this
+-// Feel free to disable this if you're overly paranoid (or don't have net access)
++// CDUKES - Added front page bar graph for daily log count
+ //------------------------------------------------------------------------
+-define  ('CALLHOME', TRUE);
++define('GRAPH_LPD', TRUE);
++define('LPD_CACHE', TRUE);
++
++
++
+ ?>
+diff -Nur -Nur php-syslog-ng/html/includes/blocks/graph-logs_per_day.php php-syslog-ng.2.9.8a/html/includes/blocks/graph-logs_per_day.php
+--- php-syslog-ng/html/includes/blocks/graph-logs_per_day.php	1969-12-31 19:00:00.000000000 -0500
++++ php-syslog-ng.2.9.8a/html/includes/blocks/graph-logs_per_day.php	2008-08-07 17:11:17.000000000 -0400
+@@ -0,0 +1,189 @@
++<?php
++/*
++ * blocks/graph-logs_per_day.php
++ *
++ * Developed by Clayton Dukes <cdukes@cdukes.com>
++ * Copyright (c) 2008 gdd.net
++ * Licensed under terms of GNU General Public License.
++ * All rights reserved.
++ *
++ * Changelog:
++ * 2008-05-13 - created
++ * 2008-07-15 - Modified for use w/ SqueezeDB
++ * 2008-08-01 - Added checks to see if all_logs exists so that new installs wouldn't puke
++ * 2008-08-06 - Modified for use w/ caching
++ *
++ */
++
++/* $Platon$ */
++
++$today = date("Y-m-d");
++$today_doy = date("D",mktime());
++
++// check to see if this is a new install (MERGELOGTABLE doesn't exists)
++$check = mysql_query ("SELECT * FROM ".MERGELOGTABLE." LIMIT 0,1"); /* >>limit<< is just to make it faster in case the db is huge */
++
++// how many days back to graph (i.e. 6 = 1 week (don't forget, counting starts at zero))
++// Less than 4 looks pretty bad (can't fit the data in the box)
++if ($check) {
++   	$days_back = 6; 
++} else {
++   	$days_back = 0; 
++}
++$day_names = array();
++if ($days_back > 0) {
++   	for ($i=0;$i<=$days_back;$i++){
++	   	$day = date( "D", strtotime ("-$i day" ) ) ;
++	   	array_push($day_names, $day);
++   	}
++} else {
++   	$day = date( "D", strtotime ("$i day" ) ) ;
++   	array_push($day_names, $day);
++}
++// die(print_r($day_names));
++
++$day_names = array_reverse($day_names);
++$data = array();
++// First grab today's count (skip if using the cache table)
++if(!defined('LPD_CACHE') || LPD_CACHE == FALSE) {
++   	if(defined('SQZ_ENABLED') && SQZ_ENABLED == TRUE) {
++	   	$sql = "SELECT SUM(counter) as count from ".DEFAULTLOGTABLE." WHERE datetime BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 1 DAY)";
++   	} else {
++	   	$sql = "SELECT count(*) as count from ".DEFAULTLOGTABLE." WHERE datetime BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 1 DAY)";
++   	}
++   	$queryresult = perform_query($sql, $dbLink);
++   	while ($line = fetch_array($queryresult)) {
++	   	array_push($data, $line['count']);
++   	}
++}
++
++// Now get today + past $days_back count from  one of our storage tables (depending on our method of storage)
++	   	for ($i=0;$i<=$days_back;$i++){
++		   	if(defined('LPD_CACHE') && LPD_CACHE == TRUE) {
++			   	$sql = "SELECT value as count from ".CACHETABLENAME." WHERE type='LPD' AND updatetime=DATE_SUB(CURDATE(), INTERVAL $i DAY)";
++		   	} else {
++			   	if(defined('SQZ_ENABLED') && SQZ_ENABLED == TRUE) {
++				   	$sql = "SELECT SUM(counter) as count from ".MERGELOGTABLE." WHERE datetime BETWEEN DATE_SUB(CURDATE(), INTERVAL $i DAY) AND DATE_SUB(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL $i DAY)";
++			   	} else {
++				   	$sql = "SELECT count(*) as count from ".MERGELOGTABLE." WHERE datetime BETWEEN DATE_SUB(CURDATE(), INTERVAL $i DAY) AND DATE_SUB(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL $i DAY)";
++			   	}
++		   	}
++		   	$queryresult = perform_query($sql, $dbLink);
++		   	$line = fetch_array($queryresult);
++		   	array_push($data, $line['count']);
++		   	// echo "$sql<br>\n";
++		   // 	echo "LOOP $i = " . $line['count'] ."<br>";
++	   	}
++$data = array_reverse($data);
++$max = 1;
++for ($i=0;$i<=$days_back;$i++){
++   	if ($data[$i] > $max)$max=$data[$i];  // find the largest data
++}
++// Set variables used based on $days_back so it scales accordingly
++if (($days_back < 7) && ($days_back > 0)) {
++	if ($max > 100000) {
++   	$multiplier = 1.8; // how much to grow the width
++   	$pad = 30; // Padding between each bar or value
++	} else {
++   	$multiplier = 2.4; // how much to grow the width
++   	$pad = 20; // Padding between each bar or value
++	}
++   	$width = round(($days_back + 1) * $multiplier * ceil($pad - $multiplier));
++} else {
++   	if ($days_back > 6) {
++	   	$multiplier = 2.25; // how much to grow the width
++	   	$pad = 15; // Padding between each bar or value, less padding here since the width is more
++	   	$width = round(($days_back + 1) * $multiplier * floor($pad + $multiplier));
++   	} else {
++	   	$multiplier = 12; // how much to grow the width
++	   	$pad = 15; // Padding between each bar or value, less padding here since the width is more
++	   	$width = round(($days_back + 1) * $multiplier * floor($pad + $multiplier));
++   	}
++
++}
++#die("Width = $width");
++$im = imagecreate($width,255); // width , height px
++#320
++// set the graph color variables 
++// $im        = imagecreate($width,$height); 
++$gray      = imagecolorallocate ($im,0xcc,0xcc,0xcc); 
++$gray_lite = imagecolorallocate ($im,0xee,0xee,0xee); 
++$gray_dark = imagecolorallocate ($im,0x7f,0x7f,0x7f); 
++$white     = imagecolorallocate ($im,0xff,0xff,0xff);
++
++$white = imagecolorallocate($im,255,255,255); // allocate some color from RGB components 
++$black = imagecolorallocate($im,0,0,0);   //
++$red = imagecolorallocate($im,255,0,0);   //
++$green = imagecolorallocate($im,0,255,0); //
++$blue = imagecolorallocate($im,0,0,255);  //
++//
++//draw X, Y Co-Ordinate
++
++// Below is: 
++// Starting at top left
++// X is left to right
++// Y is top to bottom
++$Xstart = 10;
++$Ystart = 5;
++$Xend   = 10;
++$Yend   = 230;
++// Left blue line (draw a line from top left to bottom left):
++imageline($im, $Xstart, $Ystart, $Xend, $Yend, $black );
++$Xstart = 10;
++$Ystart = 230; 
++$Xend   = ($width - 20);
++$Yend   = 230;
++// Bottom blue line (draw a line from bottom left to bottom right):
++imageline($im, $Xstart, $Ystart, $Xend, $Yend, $blue );
++
++// create background box
++imagerectangle($im,0, 0, $Xend+18, $Yend+24, $gray_dark);
++
++//Print X, Y
++imagestring($im,3,15,5,"Logs Per Day",$black);
++
++// imagestring($im,5,100,50,"Test Graph",$red);
++// imagestring($im,5,125,75,"cdukes",$green);
++
++// what next draw the bars
++$x = 15;    // bar x1 position
++$y = 229;    // bar $y1 position
++$x_width = 19;  // width of bars
++$y_ht = 0; // height of bars, will be calculated later
++// Draw the Days of the week:
++for ($i=0;$i<$days_back+1;$i++){
++   	$y_ht = round(($data[$i]/$max)* 100);    // no validation so check if $max = 0 later;
++   	// trying to fill the boxes in...clearly, I suck at this...someone make this prettier :-)
++   	imagerectangle($im,$x-1,$y-1,($x+$x_width),($y-$y_ht-1),$black); // draw the outline
++   	imagefill($im,$x+1,($y-$y_ht+1),$blue); // fill it
++   	imagerectangle($im,($x+$x_width)-1,$y-1,($x+$x_width) + 2,($y-$y_ht) +1,$gray_lite); // 3d-ish bar
++   	imagefill($im,($x+$x_width)+3,($y-$y_ht),$white); // fill it
++   	/*
++	   echo "X=$x, ";
++	   echo "Y=$y, ";
++	   echo "X2=".($x+$x_width) .", ";
++	   echo "Y2=".round($y-$y_ht)."\n<br>";
++	 */
++   	imagestring( $im,2,$x-1,$y+1,$day_names[$i],$black);
++   	imagestring( $im,2,$x-1,$y+10,humanReadable($data[$i]),$black);
++   	$x += ($x_width+$pad);   // $pad is diff between two bars;
++}
++// use values from above to draw the word "Day" at the end
++// subtract $pad+5 from the padding above for the diff between two bars
++$x=round(((($x - $pad) + 5) / $width) * $width);
++imagestring($im,3,$x,$y,"Day",$black);
++
++imagejpeg( $im, "graph.jpeg", 90);
++imagedestroy($im);
++echo "<img src='graph.jpeg'><p></p>";
++
++	function humanReadable($val,$thousands=0){
++	   	if($val>=1000)
++		   	$val=humanReadable($val/1000,++$thousands);
++	   	else{
++		   	$unit=array('','K','M','T','P','E','Z','Y');
++		   	$val=round($val,2).$unit[$thousands];
++	   	}
++	   	return $val;
++   	}
++?>
+diff -Nur -Nur php-syslog-ng/html/includes/graphit.php php-syslog-ng.2.9.8a/html/includes/graphit.php
+--- php-syslog-ng/html/includes/graphit.php	2008-03-20 19:23:46.000000000 -0400
++++ php-syslog-ng.2.9.8a/html/includes/graphit.php	2008-06-18 13:05:56.000000000 -0400
+@@ -367,12 +367,16 @@
+ else {
+ 	$srcTable = DEFAULTLOGTABLE;
+ }
+-
+-if(defined('COUNT_ROWS') && COUNT_ROWS == TRUE) {
+-	$query = "SELECT SQL_CALC_FOUND_ROWS host, count(host) as count FROM ".$srcTable." ";
+-}
+-else {
+-	$query = "SELECT host, count(host) as count FROM ".$srcTable." ";
++// CDUKES: Jun 18, 2008: Added in support of the SQZ feature
++if(defined('SQZ_ENABLED') && SQZ_ENABLED == TRUE) {
++   	$query = "SELECT host,SUM(counter) as count FROM ".$srcTable." ";
++} else {
++   	if(defined('COUNT_ROWS') && COUNT_ROWS == TRUE) {
++	   	$query = "SELECT SQL_CALC_FOUND_ROWS host, count(host) as count FROM ".$srcTable." ";
++   	}
++   	else {
++	   	$query = "SELECT host, count(host) as count FROM ".$srcTable." ";
++   	}
+ }
+ 
+ if($where) {
+@@ -484,6 +488,14 @@
+ 		}
+ 	}
+ 
++// CDUKES: Jun 18, 2008: Added in support of the SQZ feature
++if(defined('SQZ_ENABLED') && SQZ_ENABLED == TRUE) {
++   	$query = "SELECT SUM(counter) FROM ".DEFAULTLOGTABLE." ";
++		$result = perform_query($query, $dbLink) or die (mysql_error());
++		 $row = fetch_array($result);
++		$totalrows = commify($row[0]);
++		  // die ("Total COUNT rows: $totalrows");
++} else {
+ 	if(defined('COUNT_ROWS') && COUNT_ROWS == TRUE && $num_results) {
+ 		$totalrows = commify(get_total_rows(DEFAULTLOGTABLE));
+ 		 // die ("Total COUNT rows:" . $totalrows);
+@@ -495,6 +507,7 @@
+ 		$totalrows = commify($numrows);
+ 		// die ("Total rows: $query<br>" . $totalrows);
+ 	}
++}
+ 
+ 
+ 
+diff -Nur -Nur php-syslog-ng/html/includes/html_result_subheader.php php-syslog-ng.2.9.8a/html/includes/html_result_subheader.php
+--- php-syslog-ng/html/includes/html_result_subheader.php	2008-02-28 11:48:01.000000000 -0500
++++ php-syslog-ng.2.9.8a/html/includes/html_result_subheader.php	2008-05-13 18:12:26.000000000 -0400
+@@ -48,10 +48,14 @@
+ </td></tr></table>
+ <!-- cdukes - removed below to make things easier to read -->
+ <!-- http://code.google.com/p/php-syslog-ng/issues/detail?id=25 -->
+-<!--
+-<table class="query">
+-<tr><td >
+-The SQL query:
+-<input type=text size=85 value="<?php echo $query; ?>">
++<?php
++if(defined('DEBUG') && DEBUG == TRUE) {
++   	?>
++	   	<table class="query">
++	   	<tr><td >
++	   	The SQL query:
++	   	<input type=text size=85 value="<?php echo $query; ?>">
++	   	<?php
++} 
++?>
+ </td></tr></table>
+--->
+diff -Nur -Nur php-syslog-ng/html/includes/regularresult.php php-syslog-ng.2.9.8a/html/includes/regularresult.php
+--- php-syslog-ng/html/includes/regularresult.php	2008-05-10 14:40:37.000000000 -0400
++++ php-syslog-ng.2.9.8a/html/includes/regularresult.php	2008-08-07 19:21:59.000000000 -0400
+@@ -1,8 +1,8 @@
+ <?php
+-// Copyright (C) 2001-2004 by Michael Earls, michael@michaelearls.com
+-// Copyright (C) 2004-2005 Jason Taylor, j@jtaylor.ca
+-// Copyright (C) 2005 Claus Lund, clauslund@gmail.com
+-// Copyright (C) 2006 Clayton Dukes, cdukes@cdukes.com
++// Copyright (c) 2001-2004 by Michael Earls, michael@michaelearls.com
++// Copyright (c) 2004-2005 Jason Taylor, j@jtaylor.ca
++// Copyright (c) 2005 Claus Lund, clauslund@gmail.com
++// Copyright (c) 2006-2008 Clayton Dukes, cdukes@cdukes.com
+ 
+ require_once 'includes/html_header.php';
+ 
+@@ -25,16 +25,16 @@
+ $excludePriority = get_input('excludePriority', false);
+ $date = get_input('date', false); 
+ /* BEGIN: Switched by BPK - if this is the default it should be displayed as such
+-	It's preferable to be able to search through an entire table structure without
+-	the need to know which dates it encompasses.
+-if (! $date) { 
+-	$date = "yesterday"; 
+-}   
+-$date2 = get_input('date2'); 
+-if (! $date2) { 
+-	$date = "today"; 
+-}   
+-*/
++   It's preferable to be able to search through an entire table structure without
++   the need to know which dates it encompasses.
++   if (! $date) { 
++   $date = "yesterday"; 
++   }   
++   $date2 = get_input('date2'); 
++   if (! $date2) { 
++   $date = "today"; 
++   }   
++ */
+ $date2 = get_input('date2', false); 
+ /* END: Switched by BPK */
+ $time = get_input('time', false);
+@@ -46,7 +46,7 @@
+ $order = get_input('order', false);
+ $offset = get_input('offset', false);
+ if(!$offset) {
+-	$offset = 0;
++   	$offset = 0;
+ }
+ $collapse = get_input('collapse', false);
+ $table = get_input('table', false);
+@@ -58,14 +58,14 @@
+ $regexpmsgvarname="RegExpMsg".$msgvarnum;
+ 
+ while(get_input($msgvarname, false)) {
+-	${$msgvarname} = get_input($msgvarname, false);
+-	${$excmsgvarname} = get_input($excmsgvarname, false);
+-	${$regexpmsgvarname} = get_input($regexpmsgvarname, false);
++   	${$msgvarname} = get_input($msgvarname, false);
++   	${$excmsgvarname} = get_input($excmsgvarname, false);
++   	${$regexpmsgvarname} = get_input($regexpmsgvarname, false);
+ 
+ 	$msgvarnum++;
+-	$msgvarname="msg".$msgvarnum;
+-	$excmsgvarname="ExcludeMsg".$msgvarnum;
+-	$regexpmsgvarname="RegExpMsg".$msgvarnum;
++   	$msgvarname="msg".$msgvarnum;
++   	$excmsgvarname="ExcludeMsg".$msgvarnum;
++   	$regexpmsgvarname="RegExpMsg".$msgvarnum;
+ }
+ //========================================================================
+ // END: GET THE INPUT VARIABLES
+@@ -98,9 +98,9 @@
+ $_SESSION['dupcount'] = (isset($dupcount)) ? $dupcount : '';
+ $_SESSION['topx'] = (isset($topx)) ? $topx : '';
+ for ($i=1; $i<=3; $i++) {
+-        $_SESSION['msg'.$i] = (isset(${'msg'.$i})?${'msg'.$i}:'');
+-        $_SESSION['ExcludeMsg'.$i] = (isset(${'ExcludeMsg'.$i})?${'ExcludeMsg'.$i}:'');
+-        $_SESSION['RegExpMsg'.$i] = (isset(${'RegExpMsg'.$i})?${'RegExpMsg'.$i}:'');
++   	$_SESSION['msg'.$i] = (isset(${'msg'.$i})?${'msg'.$i}:'');
++   	$_SESSION['ExcludeMsg'.$i] = (isset(${'ExcludeMsg'.$i})?${'ExcludeMsg'.$i}:'');
++   	$_SESSION['RegExpMsg'.$i] = (isset(${'RegExpMsg'.$i})?${'RegExpMsg'.$i}:'');
+ }
+ /* END: Added by BPK to save search form variables info the session. */
+ 
+@@ -110,94 +110,94 @@
+ $inputValError = array();
+ 
+ if($excludeHost && !validate_input($excludeHost, 'excludeX')) {
+-	array_push($inputValError, "excludeHost");
++   	array_push($inputValError, "excludeHost");
+ }
+ if($host && !validate_input($host, 'host')) {
+-	array_push($inputValError, "host1");
++   	array_push($inputValError, "host1");
+ }
+ /* BEGIN: RegExp and Program additions by BPK
+-if($host2 && !validate_input($host2, 'host')) {
+-	array_push($inputValError, "host2");
+-}
+-*/
++   if($host2 && !validate_input($host2, 'host')) {
++   array_push($inputValError, "host2");
++   }
++ */
+ if($regexpHost && !validate_input($regexpHost, 'regexpX')) {
+-	array_push($inputValError, 'regexpHost');
++   	array_push($inputValError, 'regexpHost');
+ }
+ if($host2 && (!$regexpHost && !validate_input($host2, 'host'))
+-	|| ($regexpHost && !validate_input($host2, 'hostRegExp'))) {
+-	array_push($inputValError, 'host2');
++	   	|| ($regexpHost && !validate_input($host2, 'hostRegExp'))) {
++   	array_push($inputValError, 'host2');
+ }
+ if($excludeProgram && !validate_input($excludeProgram, 'excludeX')) {
+-	array_push($inputValError, "excludeProgram");
++   	array_push($inputValError, "excludeProgram");
+ }
+ if($program && !validate_input($program, 'program')) {
+-	array_push($inputValError, "program1");
++   	array_push($inputValError, "program1");
+ }
+ if($regexpProgram && !validate_input($regexpProgram, 'regexpX')) {
+-	array_push($inputValError, 'regexpProgram');
++   	array_push($inputValError, 'regexpProgram');
+ }
+ if($program2 && (!$regexpProgram && !validate_input($program2, 'program'))
+-	|| ($regexpProgram && !validate_input($program2, 'programRegExp'))) {
+-	array_push($inputValError, 'program2');
++	   	|| ($regexpProgram && !validate_input($program2, 'programRegExp'))) {
++   	array_push($inputValError, 'program2');
+ }
+ /* END: RegExp and Program additions by BPK */
+ if($excludeFacility && !validate_input($excludeFacility, 'excludeX')) {
+-	array_push($inputValError, "excludeFacility");
++   	array_push($inputValError, "excludeFacility");
+ }
+ if($facility && !validate_input($facility, 'facility')) {
+-	array_push($inputValError, "facility");
++   	array_push($inputValError, "facility");
+ }
+ if($excludePriority && !validate_input($excludePriority, 'excludeX')) {
+-	array_push($inputValError, "excludePriority");
++   	array_push($inputValError, "excludePriority");
+ }
+ if($priority && !validate_input($priority, 'priority')) {
+-	array_push($inputValError, "priority");
++   	array_push($inputValError, "priority");
+ }
+ if($date && !validate_input($date, 'date')) {
+-	array_push($inputValError, "date1");
++   	array_push($inputValError, "date1");
+ }
+ if($date2 && !validate_input($date2, 'date')) {
+-	array_push($inputValError, "date2");
++   	array_push($inputValError, "date2");
+ }
+ if($time && !validate_input($time, 'time')) {
+-	array_push($inputValError, "time1");
++   	array_push($inputValError, "time1");
+ }
+ if($time2 && !validate_input($time2, 'time')) {
+-	array_push($inputValError, "time2");
++   	array_push($inputValError, "time2");
+ }
+ if($limit && !validate_input($limit, 'limit')) {
+-	array_push($inputValError, "limit");
++   	array_push($inputValError, "limit");
+ }
+ if($orderby && !validate_input($orderby, 'orderby')) {
+-	array_push($inputValError, "orderby");
++   	array_push($inputValError, "orderby");
+ }
+ if($dupop && !validate_input($dupop, 'dupop')) {
+-	array_push($inputValError, "dupop");
++   	array_push($inputValError, "dupop");
+ }
+ if($dupcount && !validate_input($dupcount, 'dupcount')) {
+-	array_push($inputValError, "dupcount");
++   	array_push($inputValError, "dupcount");
+ }
+ if($order && !validate_input($order, 'order')) {
+-	array_push($inputValError, "order");
++   	array_push($inputValError, "order");
+ }
+ if(!validate_input($offset, 'offset')) {
+-	array_push($inputValError, "offset");
++   	array_push($inputValError, "offset");
+ }
+ if($collapse && !validate_input($collapse, 'collapse')) {
+-	array_push($inputValError, "collapse");
++   	array_push($inputValError, "collapse");
+ }
+ if($table && !validate_input($table, 'table')) {
+-	array_push($inputValError, "table");
++   	array_push($inputValError, "table");
+ }
+ 
+ if($inputValError) {
+-	require_once 'includes/html_header.php';
+-	echo "Input validation error! The following fields had the wrong format:<p>";
+-	foreach($inputValError as $value) {
+-		echo $value."<br>";
+-	}
+-	require_once 'includes/html_footer.php';
+-	exit;
++   	require_once 'includes/html_header.php';
++   	echo "Input validation error! The following fields had the wrong format:<p>";
++   	foreach($inputValError as $value) {
++	   	echo $value."<br>";
++   	}
++   	require_once 'includes/html_footer.php';
++   	exit;
+ }
+ //========================================================================
+ // END: INPUT VALIDATION
+@@ -215,211 +215,211 @@
+ $ParamsGET = "&";
+ 
+ if($table) {
+-	$ParamsGET=$ParamsGET."table=".$table."&";
++   	$ParamsGET=$ParamsGET."table=".$table."&";
+ }
+ 
+ if($limit) {
+-	$ParamsGET=$ParamsGET."limit=".$limit."&";
++   	$ParamsGET=$ParamsGET."limit=".$limit."&";
+ }
+ 
+ if($orderby) {
+-	$ParamsGET=$ParamsGET."orderby=".$orderby."&";
++   	$ParamsGET=$ParamsGET."orderby=".$orderby."&";
+ }
+ if($dupop) {
+-	$ParamsGET=$ParamsGET."dupop=".$dupop."&";
++   	$ParamsGET=$ParamsGET."dupop=".$dupop."&";
+ }
+ if($dupcount) {
+-	$ParamsGET=$ParamsGET."dupcount=".$dupcount."&";
++   	$ParamsGET=$ParamsGET."dupcount=".$dupcount."&";
+ }
+ 
+ if($order) {
+-	$ParamsGET=$ParamsGET."order=".$order."&";
++   	$ParamsGET=$ParamsGET."order=".$order."&";
+ }
+ 
+ if($collapse) {
+-	$ParamsGET=$ParamsGET."collapse=".$collapse."&";
++   	$ParamsGET=$ParamsGET."collapse=".$collapse."&";
+ }
+ 
+ if($pageId) {
+-	$ParamsGET=$ParamsGET."pageId=".$pageId."&";
++   	$ParamsGET=$ParamsGET."pageId=".$pageId."&";
+ }
+ 
+ /* BEGIN: Switched by BPK to allow for host lists and regexp
++   if($host2) {
++   if ($where!="") {
++   $where=$where." and ";
++   }
++   if($excludeHost==1) {
++   $where = $where." host not like '%".$host2."%' ";
++   }
++   else {
++   $where = $where." host like '%".$host2."%' ";
++   }
++   $ParamsGET=$ParamsGET."host2=".$host2."&excludeHost=".$excludeHost."&";
++   }	
++ */
+ if($host2) {
+-	if ($where!="") {
+-		$where=$where." and ";
+-	}
+-	if($excludeHost==1) {
+-		$where = $where." host not like '%".$host2."%' ";
+-	}
+-	else {
+-		$where = $where." host like '%".$host2."%' ";
+-	}
+-	$ParamsGET=$ParamsGET."host2=".$host2."&excludeHost=".$excludeHost."&";
+-}	
+-*/
+-if($host2) {
+-	if ($where!="") {
+-		$where=$where." AND ";
+-	}
+-	$clause = '';
+-	if ($regexpHost==1) {
+-		$clause = "host RLIKE '".$host2."'";
+-	}
+-	else {
+-		$parts = preg_split('/\s*[,;]+\s*/', $host2);
+-		foreach ($parts as $part) {
+-			if (empty($part)) continue;
+-			$clause .= ($clause!='') ? ' OR ' : '';
+-			$clause .= "host LIKE '%${part}%'"; 
++   	if ($where!="") {
++	   	$where=$where." AND ";
++   	}
++   	$clause = '';
++   	if ($regexpHost==1) {
++	   	$clause = "host RLIKE '".$host2."'";
++   	}
++   	else {
++	   	$parts = preg_split('/\s*[,;]+\s*/', $host2);
++	   	foreach ($parts as $part) {
++		   	if (empty($part)) continue;
++		   	$clause .= ($clause!='') ? ' OR ' : '';
++		   	$clause .= "host LIKE '%${part}%'"; 
+ 		}
+-	}
+-	$where .= (($excludeHost==1) ? 'NOT ' : '')."($clause)";
+-	$ParamsGET=$ParamsGET."host2=".$host2."&excludeHost=".$excludeHost.
+-		"&regexpHost=".$regexpHost."&";
++   	}
++   	$where .= (($excludeHost==1) ? 'NOT ' : '')."($clause)";
++   	$ParamsGET=$ParamsGET."host2=".$host2."&excludeHost=".$excludeHost.
++	  	"&regexpHost=".$regexpHost."&";
+ }
+ /* END: Switched by BPK to allow for host lists, programs, and regexp */
+ 
+ if($host) {
+-	$hostGET=implode("&host[]=",$host);
+-	$hostSQL=implode("','",$host);
+-	if($where!="") {
+-		$where = $where." AND ";
+-	}
+-	if($excludeHost==1) {
+-		$where = $where." host NOT IN ('".$hostSQL."') ";
+-	}
+-	else {
+-		$where = $where." host IN ('".$hostSQL."') ";
+-	}
+-	$ParamsGET=$ParamsGET."host[]=".$hostGET."&excludeHost=".$excludeHost."&";	
++   	$hostGET=implode("&host[]=",$host);
++   	$hostSQL=implode("','",$host);
++   	if($where!="") {
++	   	$where = $where." AND ";
++   	}
++   	if($excludeHost==1) {
++	   	$where = $where." host NOT IN ('".$hostSQL."') ";
++   	}
++   	else {
++	   	$where = $where." host IN ('".$hostSQL."') ";
++   	}
++   	$ParamsGET=$ParamsGET."host[]=".$hostGET."&excludeHost=".$excludeHost."&";	
+ }
+ /* BEGIN: Added by BPK to allow for program lists and regexp */
+ if($program2) {
+-	if ($where!="") {
+-		$where=$where." AND ";
+-	}
+-	$clause = '';
+-	if ($regexpProgram==1) {
+-		$clause = "program RLIKE '".$program2."'";
+-	}
+-	else {
+-		$parts = preg_split('/\s*[,;]+\s*/', $program2);
+-		foreach ($parts as $part) {
+-			if (empty($part)) continue;
+-			$clause .= ($clause!='') ? ' OR ' : '';
+-			$clause .= "program LIKE '%${part}%'";
+-		}
+-	}
+-	$where .= (($excludeProgram==1) ? 'NOT ' : '')."($clause)";
+-	$ParamsGET=$ParamsGET."program2=".$program2."&excludeProgram=".$excludeProgram.
+-		"&regexpProgram=".$regexpProgram."&";
++   	if ($where!="") {
++	   	$where=$where." AND ";
++   	}
++   	$clause = '';
++   	if ($regexpProgram==1) {
++	   	$clause = "program RLIKE '".$program2."'";
++   	}
++   	else {
++	   	$parts = preg_split('/\s*[,;]+\s*/', $program2);
++	   	foreach ($parts as $part) {
++		   	if (empty($part)) continue;
++		   	$clause .= ($clause!='') ? ' OR ' : '';
++		   	$clause .= "program LIKE '%${part}%'";
++	   	}
++   	}
++   	$where .= (($excludeProgram==1) ? 'NOT ' : '')."($clause)";
++   	$ParamsGET=$ParamsGET."program2=".$program2."&excludeProgram=".$excludeProgram.
++	  	"&regexpProgram=".$regexpProgram."&";
+ }
+ 
+ if($program) {
+-	$programGET=implode("&program[]=",$program);
+-	$programSQL=implode("','",$program);
+-	if($where!="") {
+-		$where = $where." AND ";
+-	}
+-	if($excludeProgram==1) {
+-		$where = $where." program NOT IN ('".$programSQL."') ";
+-	}
+-	else {
+-		$where = $where." program IN ('".$programSQL."') ";
+-	}
+-	$ParamsGET=$ParamsGET."program[]=".$programGET."&excludeProgram=".$excludeProgram."&";
++   	$programGET=implode("&program[]=",$program);
++   	$programSQL=implode("','",$program);
++   	if($where!="") {
++	   	$where = $where." AND ";
++   	}
++   	if($excludeProgram==1) {
++	   	$where = $where." program NOT IN ('".$programSQL."') ";
++   	}
++   	else {
++	   	$where = $where." program IN ('".$programSQL."') ";
++   	}
++   	$ParamsGET=$ParamsGET."program[]=".$programGET."&excludeProgram=".$excludeProgram."&";
+ }
+ /* END: Added by BPK to allow for program lists and regexp */
+ 
+ if($facility) {
+-	$facilityGET=implode("&facility[]=",$facility);
+-	$facilitySQL=implode("','",$facility);
+-	if($where!="") {
+-		$where = $where." AND ";
+-	}
+-	if($excludeFacility==1) {
+-		$where = $where." facility NOT IN ('".$facilitySQL."') ";
+-	}
+-	else {
+-		$where = $where." facility IN ('".$facilitySQL."') ";
+-	}
+-	$ParamsGET=$ParamsGET."facility[]=".$facilityGET."&excludeFacility=".$excludeFacility."&";
++   	$facilityGET=implode("&facility[]=",$facility);
++   	$facilitySQL=implode("','",$facility);
++   	if($where!="") {
++	   	$where = $where." AND ";
++   	}
++   	if($excludeFacility==1) {
++	   	$where = $where." facility NOT IN ('".$facilitySQL."') ";
++   	}
++   	else {
++	   	$where = $where." facility IN ('".$facilitySQL."') ";
++   	}
++   	$ParamsGET=$ParamsGET."facility[]=".$facilityGET."&excludeFacility=".$excludeFacility."&";
+ }
+ 
+ if($priority) {
+-	$priorityGET=implode("&priority[]=",$priority);
+-	$prioritySQL=implode("','",$priority);
+-	if($where!="") {
+-		$where = $where." AND ";
+-	}
+-	if($excludePriority==1) {
+-		$where = $where." priority NOT IN ('".$prioritySQL."') ";
+-	}
+-	else {
+-		$where = $where." priority IN ('".$prioritySQL."') ";
+-	}
+-	$ParamsGET=$ParamsGET."priority[]=".$priorityGET."&excludePriority=".$excludePriority."&";
++   	$priorityGET=implode("&priority[]=",$priority);
++   	$prioritySQL=implode("','",$priority);
++   	if($where!="") {
++	   	$where = $where." AND ";
++   	}
++   	if($excludePriority==1) {
++	   	$where = $where." priority NOT IN ('".$prioritySQL."') ";
++   	}
++   	else {
++	   	$where = $where." priority IN ('".$prioritySQL."') ";
++   	}
++   	$ParamsGET=$ParamsGET."priority[]=".$priorityGET."&excludePriority=".$excludePriority."&";
+ }
+ 
+ $datetime = "";
+ $datetime2 = "";
+ 
+ if($date) {
+-	$ParamsGET=$ParamsGET."date=".$date."&time=".$time."&";
+-	if(strcasecmp($date, 'now') == 0 || strcasecmp($date, 'today') == 0) {
+-		$date = date("Y-m-d");
+-	}
+-	elseif(strcasecmp($date, 'yesterday') == 0) {
+-		$date = date("Y-m-d", mktime(0, 0, 0, date("m")  , date("d")-1, date("Y")));
+-	}
+-	if(!$time) {
+-		$time = "00:00:00";
+-	}
+-	elseif(strcasecmp($time, 'now') == 0) {
+-		$time = date("H:i:s");
+-	}
+-	$datetime = $date." ".$time ;
++   	$ParamsGET=$ParamsGET."date=".$date."&time=".$time."&";
++   	if(strcasecmp($date, 'now') == 0 || strcasecmp($date, 'today') == 0) {
++	   	$date = date("Y-m-d");
++   	}
++   	elseif(strcasecmp($date, 'yesterday') == 0) {
++	   	$date = date("Y-m-d", mktime(0, 0, 0, date("m")  , date("d")-1, date("Y")));
++   	}
++   	if(!$time) {
++	   	$time = "00:00:00";
++   	}
++   	elseif(strcasecmp($time, 'now') == 0) {
++	   	$time = date("H:i:s");
++   	}
++   	$datetime = $date." ".$time ;
+ }
+ if($date2) {
+-	$ParamsGET=$ParamsGET."date2=".$date2."&time2=".$time2."&";
+-	if(strcasecmp($date2, 'now') == 0 || strcasecmp($date2, 'today') == 0) {
+-		$date2 = date("Y-m-d");
+-	}
+-	elseif(strcasecmp($date2, 'yesterday') == 0) {
+-		$date2 = date("Y-m-d", mktime(0, 0, 0, date("m")  , date("d")-1, date("Y")));
+-	}
+-	if(!$time2) {
+-		$time2 = "23:59:59";
+-	}
+-	elseif(strcasecmp($time2, 'now') == 0) {
+-		$time2 = date("H:i:s");
+-	}
+-	$datetime2 = $date2." ".$time2 ;
++   	$ParamsGET=$ParamsGET."date2=".$date2."&time2=".$time2."&";
++   	if(strcasecmp($date2, 'now') == 0 || strcasecmp($date2, 'today') == 0) {
++	   	$date2 = date("Y-m-d");
++   	}
++   	elseif(strcasecmp($date2, 'yesterday') == 0) {
++	   	$date2 = date("Y-m-d", mktime(0, 0, 0, date("m")  , date("d")-1, date("Y")));
++   	}
++   	if(!$time2) {
++	   	$time2 = "23:59:59";
++   	}
++   	elseif(strcasecmp($time2, 'now') == 0) {
++	   	$time2 = date("H:i:s");
++   	}
++   	$datetime2 = $date2." ".$time2 ;
+ }
+ 
+ if($datetime && $datetime2) {
+-	if($where != "") {
+-		$where = $where." AND ";
+-	}
+-	$where = $where." datetime between '".$datetime."' AND '".$datetime2."' ";
++   	if($where != "") {
++	   	$where = $where." AND ";
++   	}
++   	$where = $where." datetime between '".$datetime."' AND '".$datetime2."' ";
+ }
+ elseif($datetime) {
+-	if($where != "") {
+-		$where = $where." AND ";
+-	}
+-	$where = $where." datetime > '".$datetime."' ";
++   	if($where != "") {
++	   	$where = $where." AND ";
++   	}
++   	$where = $where." datetime > '".$datetime."' ";
+ }
+ elseif($datetime2) {
+-	if($where != "") {
+-		$where = $where." AND ";
+-	}
+-	$where = $where." datetime < '".$datetime2."' ";
++   	if($where != "") {
++	   	$where = $where." AND ";
++   	}
++   	$where = $where." datetime < '".$datetime2."' ";
+ }
+ (!$dupcount) ? ($dupcount = 0) : ($dupcount);
+ if($dupop) {
+-	if($where != "") {
+-		$where = $where." AND ";
++   	if($where != "") {
++	   	$where = $where." AND ";
+    	}
+    	switch ($dupop) {
+ 	   	case "gt":
+@@ -454,44 +454,44 @@
+ $regexpmsgvarname="RegExpMsg".$msgvarnum;
+ 
+ /** BEGIN: Switched by BPK to allow from regexp
+-while(${$msgvarname}) {
+-	if($where !="") {
+-		$where = $where." AND ";
+-	}
+-	if(${$excmsgvarname} == "on") {
+-		$where = $where." msg NOT LIKE '%".${$msgvarname}."%' ";
+-		$ParamsGET=$ParamsGET.$excmsgvarname."=".${$excmsgvarname}."&";
+-	}
+-	else {
+-		$where = $where." msg LIKE '%".${$msgvarname}."%' ";
+-	}
+-	$ParamsGET=$ParamsGET.$msgvarname."=".${$msgvarname}."&";
+-	$msgvarnum++;
+-	$msgvarname="msg".$msgvarnum;
+-	$excmsgvarname="ExcludeMsg".$msgvarnum;
+-}
+-*/
++  while(${$msgvarname}) {
++  if($where !="") {
++  $where = $where." AND ";
++  }
++  if(${$excmsgvarname} == "on") {
++  $where = $where." msg NOT LIKE '%".${$msgvarname}."%' ";
++  $ParamsGET=$ParamsGET.$excmsgvarname."=".${$excmsgvarname}."&";
++  }
++  else {
++  $where = $where." msg LIKE '%".${$msgvarname}."%' ";
++  }
++  $ParamsGET=$ParamsGET.$msgvarname."=".${$msgvarname}."&";
++  $msgvarnum++;
++  $msgvarname="msg".$msgvarnum;
++  $excmsgvarname="ExcludeMsg".$msgvarnum;
++  }
++ */
+ while(isset(${$msgvarname})) {
+-	if($where !="") {
+-		$where = $where." AND ";
+-	}
+-	$where .= 'msg ';
+-	if(${$excmsgvarname} == "on") {
+-		$where .= 'NOT ';
+-		$ParamsGET = $ParamsGET.$excmsgvarname."=".${$excmsgvarname}."&";
+-	}
+-	if(${$regexpmsgvarname} == "on") {
+-		$where .= "RLIKE '".${$msgvarname}."' ";
+-		$ParamsGET = $ParamsGET.$regexpmsgvarname."=".${$regexpmsgvarname}."&";
+-	}
+-	else {
+-		$where .= "LIKE '%".${$msgvarname}."%' ";
+-	}
+-	$ParamsGET=$ParamsGET.$msgvarname."=".${$msgvarname}."&";
+-	$msgvarnum++;
+-	$msgvarname="msg".$msgvarnum;
+-	$excmsgvarname="ExcludeMsg".$msgvarnum;
+-	$regexpmsgvarname = "RegExpMsg".$msgvarnum;
++   	if($where !="") {
++	   	$where = $where." AND ";
++   	}
++   	$where .= 'msg ';
++   	if(${$excmsgvarname} == "on") {
++	   	$where .= 'NOT ';
++	   	$ParamsGET = $ParamsGET.$excmsgvarname."=".${$excmsgvarname}."&";
++   	}
++   	if(${$regexpmsgvarname} == "on") {
++	   	$where .= "RLIKE '".${$msgvarname}."' ";
++	   	$ParamsGET = $ParamsGET.$regexpmsgvarname."=".${$regexpmsgvarname}."&";
++   	}
++   	else {
++	   	$where .= "LIKE '%".${$msgvarname}."%' ";
++   	}
++   	$ParamsGET=$ParamsGET.$msgvarname."=".${$msgvarname}."&";
++   	$msgvarnum++;
++   	$msgvarname="msg".$msgvarnum;
++   	$excmsgvarname="ExcludeMsg".$msgvarnum;
++   	$regexpmsgvarname = "RegExpMsg".$msgvarnum;
+ }
+ /** END: Switched by BPK to allow from regexp */
+ 
+@@ -501,35 +501,35 @@
+ $pieces = explode("&", $ParamsGET);
+ $hostParamsGET = "";
+ foreach($pieces as $value) {
+-	// if(!strstr($value, "host[]=") && !strstr($value, 'excludeHost=') && !strstr($value, 'offset=') && $value) {
+-	if(!strstr($value, "host[]=") && !strstr($value, 'excludeHost=') && !strstr($value, 'regexpHost=') && !strstr($value, 'offset=') && $value) {
+-		$hostParamsGET = $hostParamsGET.$value."&";
+-	}
++   	// if(!strstr($value, "host[]=") && !strstr($value, 'excludeHost=') && !strstr($value, 'offset=') && $value) {
++   	if(!strstr($value, "host[]=") && !strstr($value, 'excludeHost=') && !strstr($value, 'regexpHost=') && !strstr($value, 'offset=') && $value) {
++	   	$hostParamsGET = $hostParamsGET.$value."&";
++   	}
+ }
+ 
+ /* BEGIN: added by BPK to create GET string without facility, program, order* variables */
+ $pieces = explode("&", $ParamsGET);
+ $programParamsGET = "";
+ foreach($pieces as $value) {
+-	if(!strstr($value, "program[]=") && !strstr($value, 'excludeProgram=') && !strstr($value, 'regexpProgram=') && !strstr($value, 'offset=') && $value) {
+-		$programParamsGET = $programParamsGET.$value."&";
+-	}
++   	if(!strstr($value, "program[]=") && !strstr($value, 'excludeProgram=') && !strstr($value, 'regexpProgram=') && !strstr($value, 'offset=') && $value) {
++	   	$programParamsGET = $programParamsGET.$value."&";
++   	}
+ }
+ 
+ $pieces = explode("&", $ParamsGET);
+ $facilityParamsGET = "";
+ foreach($pieces as $value) {
+-	if(!strstr($value, "facility[]=") && !strstr($value, 'excludeFacility=') && !strstr($value, 'offset=') && $value) {
+-		$facilityParamsGET = $facilityParamsGET.$value."&";
+-	}
++   	if(!strstr($value, "facility[]=") && !strstr($value, 'excludeFacility=') && !strstr($value, 'offset=') && $value) {
++	   	$facilityParamsGET = $facilityParamsGET.$value."&";
++   	}
+ }
+ 
+ $pieces = explode("&", $ParamsGET);
+ $orderParamsGET = "";
+ foreach($pieces as $value) {
+-	if(!strstr($value, "order=") && !strstr($value, 'orderby=') && !strstr($value, 'offset=') && $value) {
+-		$orderParamsGET = $orderParamsGET.$value."&";
+-	}
++   	if(!strstr($value, "order=") && !strstr($value, 'orderby=') && !strstr($value, 'offset=') && $value) {
++	   	$orderParamsGET = $orderParamsGET.$value."&";
++   	}
+ }
+ /* END: added by BPK to create GET string without facility, program, order* variables */
+ 
+@@ -540,24 +540,24 @@
+ // it saves an extra query to get the total number of rows.
+ //------------------------------------------------------------------------
+ if($table) {
+-	$srcTable = $table;
++   	$srcTable = $table;
+ }
+ else {
+-	$srcTable = DEFAULTLOGTABLE;
++   	$srcTable = DEFAULTLOGTABLE;
+ }
+ 
+ if(defined('COUNT_ROWS') && COUNT_ROWS == TRUE) {
+-	$query = "SELECT SQL_CALC_FOUND_ROWS * FROM ".$srcTable." ";
++   	$query = "SELECT SQL_CALC_FOUND_ROWS * FROM ".$srcTable." ";
+ }
+ else {
+-	$query = "SELECT * FROM ".$srcTable." ";
++   	$query = "SELECT * FROM ".$srcTable." ";
+ }
+ 
+ if($where) {
+-	$query = $query."WHERE ".$where." ORDER BY ".$orderby." ".$order." LIMIT ".$offset.", ".$limit;
++   	$query = $query."WHERE ".$where." ORDER BY ".$orderby." ".$order." LIMIT ".$offset.", ".$limit;
+ }
+ else {
+-	$query = $query."ORDER BY ".$orderby." ".$order." LIMIT ".$offset.", ".$limit;
++   	$query = $query."ORDER BY ".$orderby." ".$order." LIMIT ".$offset.", ".$limit;
+ }
+ 
+ //------------------------------------------------------------------------
+@@ -567,9 +567,9 @@
+ //------------------------------------------------------------------------
+ $results = perform_query($query, $dbLink);
+ if(defined('COUNT_ROWS') && COUNT_ROWS == TRUE) {
+-	$num_results_array = perform_query("SELECT FOUND_ROWS()", $dbLink);
+-	$num_results_array = fetch_array($num_results_array);
+-	$num_results = $num_results_array[0];
++   	$num_results_array = perform_query("SELECT FOUND_ROWS()", $dbLink);
++   	$num_results_array = fetch_array($num_results_array);
++   	$num_results = $num_results_array[0];
+ }
+ //========================================================================
+ // END: BUILD AND EXECUTE SQL STATEMENT
+@@ -583,28 +583,28 @@
+ // Collapse consecutive identical messages into one line
+ //------------------------------------------------------------------------
+ if($collapse == 1) {
+-	$n = 0;
+-	while($row = fetch_array($results)) {
+-//		if($n>0 && $row['msg'] == $result_array[$n-1]['msg'] 
++   	$n = 0;
++   	while($row = fetch_array($results)) {
++	   	//		if($n>0 && $row['msg'] == $result_array[$n-1]['msg'] 
+ 		if($row['msg'] == $result_array[$n-1]['msg'] 
+-			&& $row['host'] == $result_array[$n-1]['host']) {
+-			$result_array[$n-1]['count'] = $result_array[$n-1]['count'] + 1;
+-			$n--;
+-		}
+-		else {
+-			$row['count'] = 1;
+-			$result_array[$n] = $row;
+-		}
+-		$n++;
+-	}
++				&& $row['host'] == $result_array[$n-1]['host']) {
++		   	$result_array[$n-1]['count'] = $result_array[$n-1]['count'] + 1;
++		   	$n--;
++	   	}
++	   	else {
++		   	$row['count'] = 1;
++		   	$result_array[$n] = $row;
++	   	}
++	   	$n++;
++   	}
+ }
+ else {
+-	$n = 0;
+-	while($row = fetch_array($results)) {
+-		$row['count'] = 1;
+-		$result_array[$n] = $row;
+-		$n++;
+-	}
++   	$n = 0;
++   	while($row = fetch_array($results)) {
++	   	$row['count'] = 1;
++	   	$result_array[$n] = $row;
++	   	$n++;
++   	}
+ }	
+ //========================================================================
+ // END: PREPARE RESULT ARRAY
+@@ -620,220 +620,224 @@
+ if (count($result_array)){
+ 
+ 	//------------------------------------------------------------------------
+-	// If the query returned some results then start the table with the
+-	// results
+-	//------------------------------------------------------------------------
+-?>
+-<table width=100%>
+-<tr class="resultsheader">
+-<!-- BEGIN: Switched by BPK to allow for sorting via links
+-<td>SEQ</td>
+-<td>HOST</td>
+-<td>FACILITY</td>
+-<td>DATE TIME</td>
+-<td>MESSAGE</td>
+--->
+-<?php
+-	echo '<td><a href="'.$_SERVER['PHP_SELF'].'?orderby=seq&order='
+-		.(($orderby=='seq' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">SEQ</a></td>';
+-	echo '<td><a href="'.$_SERVER['PHP_SELF'].'?orderby=host&order='
+-		.(($orderby=='host' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">HOST</a></td>';
+-	echo '<td><a href="'.$_SERVER['PHP_SELF'].'?orderby=facility&order='
+-		.(($orderby=='facility' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">FACILITY</a></td>';
+-	echo '<td><a href="'.$_SERVER['PHP_SELF'].'?orderby=fo&order='
+-		.(($orderby=='fo' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">FO</a></td>';
+-	echo '<td><a href="'.$_SERVER['PHP_SELF'].'?orderby=lo&order='
+-		.(($orderby=='lo' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">LO</a></td>';
+-	echo '<td><a href="'.$_SERVER['PHP_SELF'].'?orderby=counter&order='
+-		.(($orderby=='counter' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">COUNT</a></td>';
+-	echo '<td><a href="'.$_SERVER['PHP_SELF'].'?orderby=datetime&order='
+-		.(($orderby=='datetime' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">DATE TIME</a></td>';
+-	echo '<td><a href="'.$_SERVER['PHP_SELF'].'?orderby=program&order='
+-		.(($orderby=='program' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">PROGRAM</a></td>';
+-	echo '<td><a href="'.$_SERVER['PHP_SELF'].'?orderby=msg&order='
+-		.(($orderby=='program' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">MESSAGE</a></td>';
+-?>
+-<!-- END: Switched by BPK to allow for sorting via links -->
+-</tr>
+-<?php
+-	//------------------------------------------------------------------------
+-	// Output the table with the results
+-	// Use an alternating background and color code the priority column
+-	//------------------------------------------------------------------------
+-	if(CEMDB == "ON") {
+-		require_once 'includes/CEMDB.class.php';
+-		$cemdb = new CEMDB($dbLink);
+-	}
++   	// If the query returned some results then start the table with the
++   	// results
++   	//------------------------------------------------------------------------
++   	?>
++	   	<table width=100%>
++	   	<tr class="resultsheader">
++	   	<!-- BEGIN: Switched by BPK to allow for sorting via links
++	   	<td>SEQ</td>
++	   	<td>HOST</td>
++	   	<td>FACILITY</td>
++	   	<td>DATE TIME</td>
++	   	<td>MESSAGE</td>
++	   	-->
++	   	<?php
++	   	echo '<td><a href="'.$_SERVER['PHP_SELF'].'?orderby=seq&order='
++	   	.(($orderby=='seq' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">SEQ</a></td>';
++   	echo '<td><a href="'.$_SERVER['PHP_SELF'].'?orderby=host&order='
++	   	.(($orderby=='host' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">HOST</a></td>';
++   	echo '<td><a href="'.$_SERVER['PHP_SELF'].'?orderby=facility&order='
++	   	.(($orderby=='facility' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">FACILITY</a></td>';
++   	if(defined('SQZ_ENABLED') && SQZ_ENABLED == TRUE) {
++	   	echo '<td><a href="'.$_SERVER['PHP_SELF'].'?orderby=fo&order='
++		   	.(($orderby=='fo' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">FO</a></td>';
++	   	echo '<td><a href="'.$_SERVER['PHP_SELF'].'?orderby=lo&order='
++		   	.(($orderby=='lo' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">LO</a></td>';
++	   	echo '<td><a href="'.$_SERVER['PHP_SELF'].'?orderby=counter&order='
++		   	.(($orderby=='counter' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">COUNT</a></td>';
++   	}
++   	echo '<td><a href="'.$_SERVER['PHP_SELF'].'?orderby=datetime&order='
++	   	.(($orderby=='datetime' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">DATE TIME</a></td>';
++   	echo '<td><a href="'.$_SERVER['PHP_SELF'].'?orderby=program&order='
++	   	.(($orderby=='program' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">PROGRAM</a></td>';
++   	echo '<td><a href="'.$_SERVER['PHP_SELF'].'?orderby=msg&order='
++	   	.(($orderby=='program' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">MESSAGE</a></td>';
++   	?>
++	   	<!-- END: Switched by BPK to allow for sorting via links -->
++	   	</tr>
++	   	<?php
++	   	//------------------------------------------------------------------------
++	   	// Output the table with the results
++	   	// Use an alternating background and color code the priority column
++	   	//------------------------------------------------------------------------
++	   	if(CEMDB == "ON") {
++		   	require_once 'includes/CEMDB.class.php';
++		   	$cemdb = new CEMDB($dbLink);
++	   	}
+ 
+ 	$color = "lighter";
+-	$today = date('Y-m-d');
+-	for($i=0; $i < count($result_array); $i++) {
+-		$row = $result_array[$i];
+-		if($color == "darker") {
+-			$color = "lighter";
+-		}
+-		else {
+-			$color = "darker";
+-		}
+-		echo "<tr class=\"$color\">";
+-		echo "<td>".$row['seq']."</td>";
++   	$today = date('Y-m-d');
++   	for($i=0; $i < count($result_array); $i++) {
++	   	$row = $result_array[$i];
++	   	if($color == "darker") {
++		   	$color = "lighter";
++	   	}
++	   	else {
++		   	$color = "darker";
++	   	}
++	   	echo "<tr class=\"$color\">";
++	   	echo "<td>".$row['seq']."</td>";
+ 
+ 		echo "<td><a href=\"".$_SERVER["PHP_SELF"]."?excludeHost=0&host[]=".$row['host']."&".$hostParamsGET."\">";
+-		echo $row['host']."</a></td>";
++	   	echo $row['host']."</a></td>";
+ 
+ 		// 3rd column: Spit out the colour-coded FACILITY/PRIORITY fields.
+-		/* BEGIN: Switched by BPK to allow filtering based on facility
+-		if($row['priority'] == "debug") {
+-			echo "<td class=\"sev0\">".$row['facility']."-".$row['priority']."</td>";
+-		}
+-		elseif($row['priority'] == "info") {
+-			echo "<td class=\"sev1\">".$row['facility']."-".$row['priority']."</td>";
+-		}
+-		elseif ($row['priority'] == "notice") {
+-			echo "<td class=\"sev2\">".$row['facility']."-".$row['priority']."</td>";
+-		}
+-		elseif ($row['priority'] == "warning") {
+-			echo "<td class=\"sev3\">".$row['facility']."-".$row['priority']."</td>";
+-		}
+-		elseif ($row['priority'] == "err") {
+-			echo "<td class=\"sev4\">".$row['facility']."-".$row['priority']."</td>";
+-		}
+-		elseif ($row['priority'] == "crit") {
+-			echo "<td class=\"sev5\">".$row['facility']."-".$row['priority']."</td>";
+-		}
+-		elseif ($row['priority'] == "alert") {
+-			echo "<td class=\"sev6\">".$row['facility']."-".$row['priority']."</td>";
+-		}
+-		elseif ($row['priority'] == "emerg") {
+-			echo "<td class=\"sev7\">".$row['facility']."-".$row['priority']."</td>";
+-		}
+-		*/
++	  	/* BEGIN: Switched by BPK to allow filtering based on facility
++		   if($row['priority'] == "debug") {
++		   echo "<td class=\"sev0\">".$row['facility']."-".$row['priority']."</td>";
++		   }
++		   elseif($row['priority'] == "info") {
++		   echo "<td class=\"sev1\">".$row['facility']."-".$row['priority']."</td>";
++		   }
++		   elseif ($row['priority'] == "notice") {
++		   echo "<td class=\"sev2\">".$row['facility']."-".$row['priority']."</td>";
++		   }
++		   elseif ($row['priority'] == "warning") {
++		   echo "<td class=\"sev3\">".$row['facility']."-".$row['priority']."</td>";
++		   }
++		   elseif ($row['priority'] == "err") {
++		   echo "<td class=\"sev4\">".$row['facility']."-".$row['priority']."</td>";
++		   }
++		   elseif ($row['priority'] == "crit") {
++		   echo "<td class=\"sev5\">".$row['facility']."-".$row['priority']."</td>";
++		   }
++		   elseif ($row['priority'] == "alert") {
++		   echo "<td class=\"sev6\">".$row['facility']."-".$row['priority']."</td>";
++		   }
++		   elseif ($row['priority'] == "emerg") {
++		   echo "<td class=\"sev7\">".$row['facility']."-".$row['priority']."</td>";
++		   }
++		 */
+ 
+ 		echo "<td class=\"";
+-		switch ($row['priority']) {
+-			case 'debug':
+-				echo 'sev0';
+-				break;
+-			case 'info':
+-				echo 'sev1';
+-				break;
+-			case 'notice':
+-				echo 'sev2';
+-				break;
+-			case 'warning':
+-				echo 'sev3';
+-				break;
+-			case 'err':
+-				echo 'sev4';
+-				break;
+-			case 'crit':
+-				echo 'sev5';
+-				break;
+-			case 'alert':
+-				echo 'sev6';
+-				break;
+-			case 'emerg':
+-				echo 'sev7';
+-				break;
+-		}
+-		echo "\"><a href=\"".$_SERVER['PHP_SELF']."?excludeFacility=0&facility[]=".$row['facility']."&".$facilityParamsGET."\">";
+-		echo $row['facility']."</a></td>\n";
++	   	switch ($row['priority']) {
++		   	case 'debug':
++			   	echo 'sev0';
++			   	break;
++		   	case 'info':
++			   	echo 'sev1';
++			   	break;
++		   	case 'notice':
++			   	echo 'sev2';
++			   	break;
++		   	case 'warning':
++			   	echo 'sev3';
++			   	break;
++		   	case 'err':
++			   	echo 'sev4';
++			   	break;
++		   	case 'crit':
++			   	echo 'sev5';
++			   	break;
++		   	case 'alert':
++			   	echo 'sev6';
++			   	break;
++		   	case 'emerg':
++			   	echo 'sev7';
++			   	break;
++	   	}
++	   	echo "\"><a href=\"".$_SERVER['PHP_SELF']."?excludeFacility=0&facility[]=".$row['facility']."&".$facilityParamsGET."\">";
++	   	echo $row['facility']."</a></td>\n";
++
++		// echo "<td>".$row['fo']."</td>";
++	   	if(defined('SQZ_ENABLED') && SQZ_ENABLED == TRUE) {
++		   	$pieces = explode(' ', $row['fo']);
++		   	echo '<td>';
++		   	if ($pieces[0]!=$today) {
++			   	echo $pieces[0]."&nbsp;";
++		   	}
++		   	echo $pieces[1];
++		   	echo "</td>\n";
++		   	// echo "<td>".$row['fo']."</td>";
++		   	$pieces = explode(' ', $row['lo']);
++		   	echo '<td>';
++		   	if ($pieces[0]!=$today) {
++			   	echo $pieces[0]."&nbsp;";
++		   	}
++		   	echo $pieces[1];
++		   	echo "</td>\n";
++		   	// Counter row follows
++		   	echo "<td>".$row['counter']."</td>";
++	   	}
++	   	/* END: Switched by BPK to allow filtering based on facility */
++
+ 
+- 		// echo "<td>".$row['fo']."</td>";
+-		$pieces = explode(' ', $row['fo']);
+-		echo '<td>';
+-		if ($pieces[0]!=$today) {
+-			echo $pieces[0]."&nbsp;";
+-		}
+-		echo $pieces[1];
+-		echo "</td>\n";
+- 		// echo "<td>".$row['fo']."</td>";
+-		$pieces = explode(' ', $row['lo']);
+-		echo '<td>';
+-		if ($pieces[0]!=$today) {
+-			echo $pieces[0]."&nbsp;";
+-		}
+-		echo $pieces[1];
+-		echo "</td>\n";
+-		// Counter row follows
+- 		echo "<td>".$row['counter']."</td>";
+-		/* END: Switched by BPK to allow filtering based on facility */
+- 
+-		
+ 		/* BEGIN: Added by BPK to hide the date if it's the same as today
+- 		echo "<td>".$row['datetime']."</td>";
+-		*/
+-		$pieces = explode(' ', $row['datetime']);
+-		echo '<td>';
+-		if ($pieces[0]!=$today) {
+-			echo $pieces[0]."&nbsp;";
+-		}
+-		echo $pieces[1];
+-		echo "</td>\n";
+-		echo '<td>';
++		   echo "<td>".$row['datetime']."</td>";
++		 */
++	   	$pieces = explode(' ', $row['datetime']);
++	   	echo '<td>';
++	   	if ($pieces[0]!=$today) {
++		   	echo $pieces[0]."&nbsp;";
++	   	}
++	   	echo $pieces[1];
++	   	echo "</td>\n";
++	   	echo '<td>';
+ 	   	$program = htmlspecialchars($row['program']);
+-			if (!empty($program)) {
+-				$pattern = '/^'.addcslashes($program, '.()[]/\\').'/';
+-				$replacement = '<a href="'.$_SERVER['PHP_SELF'].'?excludeProgram=0&program[]='.$program.'&'.$programParamsGET.'">'.$program.'</a>';
+-				$program = preg_replace($pattern, $replacement, $program);
+-			}
+-		echo $program;
+-		echo "</td>\n";
+-		/* END: Added by BPK to hide the date if it's the same as today */
++	   	if (!empty($program)) {
++		   	$pattern = '/^'.addcslashes($program, '.()[]/\\').'/';
++		   	$replacement = '<a href="'.$_SERVER['PHP_SELF'].'?excludeProgram=0&program[]='.$program.'&'.$programParamsGET.'">'.$program.'</a>';
++		   	$program = preg_replace($pattern, $replacement, $program);
++	   	}
++	   	echo $program;
++	   	echo "</td>\n";
++	   	/* END: Added by BPK to hide the date if it's the same as today */
+ 
+ 		/* BEGIN: Switched by BPK to show count along with extras like
+-				filtering by program, and disabled popups with no information
+-		if($row['count'] > 1) {
+-			echo "<td><b>".$row['count']." *</b> ".htmlentities($row['msg'])."</td>";
+-		}
+-		else {
+-		*/
+-			/* BEGIN: CEMDB Mod */
+-		/* CONTINUE: Switched by BPK ... (cdukes - note - added close comment to end of this line due to no match found) 
+-			if(CEMDB == "ON") {
+-
+-				// Added below to remove whitespace between delimiters (% and :)
+-			   	// example:
+-			   	// "%SYS-5-CONFIG :" is now
+-			   	// "%SYS-5-CONFIG:"
+-                $row['msg'] = preg_replace('/\s:/', ':', $row['msg']);
+-
+-                // Grab Mnemonic name and Message and leave out the stuff at the front
+-                $row['msg'] = preg_replace('/.*(%.*?:.*)/', '$1', $row['msg']);
+-				// Original message:
+-				// 3852752: DRP/0/0/CPU0:Feb 4 20:12:36.098 EST5: SSHD_[65697]: %SECURITY-SSHD-3-ERR_GENERAL: Failed to get DSA public key
+-				// New message using regex above: .*(%.*?:.*):
+-				// SSHD_[65697]: %SECURITY-SSHD-3-ERR_GENERAL: Failed to get DSA public key
+-				$data = $cemdb->lookup($row['msg']);
+-				if($data !== false) {
+-					$info  =     "<b>Name:</b>"                    . $data[0];
+-					$info .= "<br><b>Message:</b> "                . $data[1];
+-					$info .= "<br><b>Explanation:</b> "            . $data[2];
+-					$info .= "<br><b>Action:</b> "                 . $data[3];
+-					$info .= "<br><b>Record last updated on:</b> " . $data[4];
+-					$info = str_replace("\n", "", $info);
+-				   	$info = htmlentities($info);
+-				   	if (!get_magic_quotes_gpc()) {
+-					   	$info = stripslashes($info);
+-				   	}
+-				}
+-				else {
+-					//if (preg_match("/%[:alpha:].*:/", $row['msg']) == 0) {
+-					if (preg_match("/%[[:alpha:]]+$/", $row['msg']) == 0) {
+-
+-						$info = "";
+-					} else {
+-						$info = "No Data available for this message.";
+-					}
+-				}
+-?>				<th  align="left"><A href="#" onmouseover="overlib('<TABLE border=1 cellspacing=0 cellpadding=0 width=100%><TR><TD class=tooltip><?=$info?></TD></TR></TABLE>');" onmouseout=nd(); name ="spacer" ><? echo htmlspecialchars($row['msg']);?></A></th>
+-<?			}
+-			else {
+-				echo "<td>".htmlspecialchars($row['msg'])."</td>";
+-			}
+-			/* END: CEMDB Mod */
+-		/* CONTINUE: Switched by BPK ...
+-		}
++		   filtering by program, and disabled popups with no information
++		   if($row['count'] > 1) {
++		   echo "<td><b>".$row['count']." *</b> ".htmlentities($row['msg'])."</td>";
++		   }
++		   else {
++		 */
++	   	/* BEGIN: CEMDB Mod */
++	   	/* CONTINUE: Switched by BPK ... (cdukes - note - added close comment to end of this line due to no match found) 
++		   if(CEMDB == "ON") {
++
++		// Added below to remove whitespace between delimiters (% and :)
++	   	// example:
++	   	// "%SYS-5-CONFIG :" is now
++	   	// "%SYS-5-CONFIG:"
++	   	$row['msg'] = preg_replace('/\s:/', ':', $row['msg']);
++
++		// Grab Mnemonic name and Message and leave out the stuff at the front
++	   	$row['msg'] = preg_replace('/.*(%.*?:.*)/', '$1', $row['msg']);
++	   	// Original message:
++	   	// 3852752: DRP/0/0/CPU0:Feb 4 20:12:36.098 EST5: SSHD_[65697]: %SECURITY-SSHD-3-ERR_GENERAL: Failed to get DSA public key
++	   	// New message using regex above: .*(%.*?:.*):
++	   	// SSHD_[65697]: %SECURITY-SSHD-3-ERR_GENERAL: Failed to get DSA public key
++	   	$data = $cemdb->lookup($row['msg']);
++	   	if($data !== false) {
++	   	$info  =     "<b>Name:</b>"                    . $data[0];
++	   	$info .= "<br><b>Message:</b> "                . $data[1];
++	   	$info .= "<br><b>Explanation:</b> "            . $data[2];
++	   	$info .= "<br><b>Action:</b> "                 . $data[3];
++	   	$info .= "<br><b>Record last updated on:</b> " . $data[4];
++	   	$info = str_replace("\n", "", $info);
++	   	$info = htmlentities($info);
++	   	if (!get_magic_quotes_gpc()) {
++	   	$info = stripslashes($info);
++	   	}
++	   	}
++	   	else {
++	   	//if (preg_match("/%[:alpha:].*:/", $row['msg']) == 0) {
++	   	if (preg_match("/%[[:alpha:]]+$/", $row['msg']) == 0) {
++
++		$info = "";
++	   	} else {
++	   	$info = "No Data available for this message.";
++	   	}
++	   	}
++	   	?>				<th  align="left"><A href="#" onmouseover="overlib('<TABLE border=1 cellspacing=0 cellpadding=0 width=100%><TR><TD class=tooltip><?php echo $info?></TD></TR></TABLE>');" onmouseout=nd(); name ="spacer" ><?php echo htmlspecialchars($row['msg']);?></A></th>
++	   	<?			}
++	   	else {
++	   	echo "<td>".htmlspecialchars($row['msg'])."</td>";
++	   	}
++	   	/* END: CEMDB Mod */
++	   	/* CONTINUE: Switched by BPK ...
++		   }
+ 		 */
+ 	   	// Grab Mnemonic name and Message and leave out the stuff at the front
+ 	   	$row['msg'] = preg_replace('/.*(%.*?:.*)/', '$1', $row['msg']);
+@@ -841,139 +845,141 @@
+ 	   	// 3852752: DRP/0/0/CPU0:Feb 4 20:12:36.098 EST5: SSHD_[65697]: %SECURITY-SSHD-3-ERR_GENERAL: Failed to get DSA public key
+ 	   	// New message using regex above: .*(%.*?:.*):
+ 	   	// SSHD_[65697]: %SECURITY-SSHD-3-ERR_GENERAL: Failed to get DSA public key
++	   	if(CEMDB == "ON") {
+ 	   	$data = $cemdb->lookup($row['msg']);
+-	   	// BPK - this is where the revised version begins
+-		// CDUKES - BETA - FIX THIS
+-		$printed = false;
+-		if (CEMDB == "ON") {
+-			$data = $cemdb->lookup($row['msg']);
+-			if($data !== false) {
+-				$info  =     "<b>Name:</b>"                    . $data[0];
+-				$info .= "<br><b>Message:</b> "                . $data[1];
+-				$info .= "<br><b>Explanation:</b> "            . $data[2];
+-				$info .= "<br><b>Action:</b> "                 . $data[3];
+-				$info .= "<br><b>Record last updated on:</b> " . $data[4];
+-				$info = str_replace("\n", "", $info);
+-				$info = htmlentities($info);
+-				$msg = (($row['count'] > 1) ? '<b>'.$row['count'].' *</b> ' : '') . htmlspecialchars($row['msg']);
+-?>				<th  align="left"><A href="#" onmouseover="overlib('<TABLE border=1 cellspacing=0 cellpadding=0 width=100%><TR><TD class=tooltip><?=$info?></TD></TR></TABLE>');" onmouseout=nd(); name ="spacer" ><? echo $msg;?></A></th>
+-<?php			$printed = true;
+-			}
+-			
+ 		}
+-		// if CEMDB off or row wasn't found, print it
+-		// this will prevent unnecessary popups and allow filtering via a link
+-		if (!$printed) { 
++	   	// BPK - this is where the revised version begins
++	   	// CDUKES - BETA - FIX THIS
++	   	$printed = false;
++	   	if (CEMDB == "ON") {
++		   	$data = $cemdb->lookup($row['msg']);
++		   	if($data !== false) {
++			   	$info  =     "<b>Name:</b>"                    . $data[0];
++			   	$info .= "<br><b>Message:</b> "                . $data[1];
++			   	$info .= "<br><b>Explanation:</b> "            . $data[2];
++			   	$info .= "<br><b>Action:</b> "                 . $data[3];
++			   	$info .= "<br><b>Record last updated on:</b> " . $data[4];
++			   	$info = str_replace("\n", "", $info);
++			   	$info = htmlentities($info);
++			   	$msg = (($row['count'] > 1) ? '<b>'.$row['count'].' *</b> ' : '') . htmlspecialchars($row['msg']);
++			   	?>				<th  align="left"><A href="#" onmouseover="overlib('<TABLE border=1 cellspacing=0 cellpadding=0 width=100%><TR><TD class=tooltip><?php echo $info?></TD></TR></TABLE>');" onmouseout=nd(); name ="spacer" ><?php echo $msg;?></A></th>
++				   	<?php			$printed = true;
++		   	}
++
++		}
++	   	// if CEMDB off or row wasn't found, print it
++	   	// this will prevent unnecessary popups and allow filtering via a link
++	   	if (!$printed) { 
+ 			$msg = htmlspecialchars($row['msg']);
+-			echo "<td>";
+-			if ($row['count'] > 1) echo '<b>'.$row['count'].' *</b> ';
+-			echo "$msg</td>\n";
+-		}
+-		echo "</tr>\n";
+-	}
+-	echo "</table>\n";
++		   	echo "<td>";
++		   	if ($row['count'] > 1) echo '<b>'.$row['count'].' *</b> ';
++		   	echo "$msg</td>\n";
++	   	}
++	   	echo "</tr>\n";
++   	}
++   	echo "</table>\n";
+ 
+ 	//------------------------------------------------------------------------
+-	// Create the list with links to other results.
+-	// The list will show a maximum of 11 pages + first and last
+-	//------------------------------------------------------------------------
+-	echo "Result Page: ";
++   	// Create the list with links to other results.
++  	// The list will show a maximum of 11 pages + first and last
++   	//------------------------------------------------------------------------
++   	echo "Result Page: ";
+ 
+ 	if($num_results) {
+ 
+ 		// If you are not on the first page then show the FIRST link
+-		if($offset>0) {
+-			echo "<a href=\"".$_SERVER["PHP_SELF"]."?offset=0".$ParamsGET."\"><BIG>FIRST</BIG></a> ";
+-		}
++	   	if($offset>0) {
++		   	echo "<a href=\"".$_SERVER["PHP_SELF"]."?offset=0".$ParamsGET."\"><BIG>FIRST</BIG></a> ";
++	   	}
+ 
+ 		// If you are not on one of the first two pages then also show the PREV link
+-		if($offset>$limit+1) {
+-			$prevoffset=$offset-$limit ;
+-			echo "<a href=\"".$_SERVER["PHP_SELF"]."?offset=".$prevoffset.$ParamsGET."\"><BIG>PREV</BIG></a>\n";
+-		}
++	   	if($offset>$limit+1) {
++		   	$prevoffset=$offset-$limit ;
++		   	echo "<a href=\"".$_SERVER["PHP_SELF"]."?offset=".$prevoffset.$ParamsGET."\"><BIG>PREV</BIG></a>\n";
++	   	}
+ 
+ 		// Calculate the total number of pages in the query
+-		$totalpages=intval($num_results/$limit);
+-		if($num_results%$limit) {
+-			$totalpages++;
+-		}
++	   	$totalpages=intval($num_results/$limit);
++	   	if($num_results%$limit) {
++		   	$totalpages++;
++	   	}
+ 
+ 		// Calculate the current page
+-		$curpage=floor($offset/$limit);
++	   	$curpage=floor($offset/$limit);
+ 
+ 		// Figure out what the first page on the list should be
+-		if($curpage<5) {
+-			$firstpage = 0;
+-		}
+-		else {
+-			$firstpage = $curpage - 5;
+-		}
+-		if($curpage>$totalpages - 6) {
+-			$firstpage = $totalpages - 11;
+-		}
+-		if($firstpage<5) {
+-			$firstpage = 0;
+-		}
+-		if($totalpages < 11) {
+-			$listpages = $totalpages;
+-		}
+-		else {
+-			$listpages = 11;
+-		}
++	   	if($curpage<5) {
++		   	$firstpage = 0;
++	   	}
++	   	else {
++		   	$firstpage = $curpage - 5;
++	   	}
++	   	if($curpage>$totalpages - 6) {
++		   	$firstpage = $totalpages - 11;
++	   	}
++	   	if($firstpage<5) {
++		   	$firstpage = 0;
++	   	}
++	   	if($totalpages < 11) {
++		   	$listpages = $totalpages;
++	   	}
++	   	else {
++		   	$listpages = 11;
++	   	}
+ 
+ 		// Determine what the last page on the list should be
+-		$lastpage = $firstpage + $listpages;
+-	
++	   	$lastpage = $firstpage + $listpages;
++
+ 		// Output the list of numbered links to the 11 closest pages.
+-		// The current page is high-lighted and the other are created as links
+-		for($i=$firstpage;$i<$lastpage;$i++) {
+-			$pageoffset=$i*$limit;
+-			$pagenum = $i + 1;
+-			if($curpage==$i) {
+-				echo "<font size=+1>[$pagenum]</font>\n";
+-			}
+-			else {
+-				echo "<a href=\"".$_SERVER["PHP_SELF"]."?offset=".$pageoffset.$ParamsGET."\">$pagenum</a>\n";
+-			}
+-		}
++	  	// The current page is high-lighted and the other are created as links
++	   	for($i=$firstpage;$i<$lastpage;$i++) {
++		   	$pageoffset=$i*$limit;
++		   	$pagenum = $i + 1;
++		   	if($curpage==$i) {
++			   	echo "<font size=+1>[$pagenum]</font>\n";
++		   	}
++		   	else {
++			   	echo "<a href=\"".$_SERVER["PHP_SELF"]."?offset=".$pageoffset.$ParamsGET."\">$pagenum</a>\n";
++		   	}
++	   	}
+ 
+ 		// If there's a page with a higher offset and that page is not the last
+-		// on the list then create a NEXT link.
+-		if((intval($offset/$limit)+2)<$totalpages) {
+-			$nextoffset=$offset+$limit;
+-			echo "<a href=\"".$_SERVER["PHP_SELF"]."?offset=".$nextoffset.$ParamsGET."\"><BIG>NEXT</BIG></a> \n";
+-		}
++	   	// on the list then create a NEXT link.
++	  	if((intval($offset/$limit)+2)<$totalpages) {
++		   	$nextoffset=$offset+$limit;
++		   	echo "<a href=\"".$_SERVER["PHP_SELF"]."?offset=".$nextoffset.$ParamsGET."\"><BIG>NEXT</BIG></a> \n";
++	   	}
+ 
+ 		// If you are not currently on the last page then create a LAST link.
+-		if($totalpages>1 && (intval($offset/$limit)+1)!=$totalpages) {
+-			$lastoffset=($totalpages-1)*$limit;
+-			echo "<a href=\"".$_SERVER["PHP_SELF"]."?offset=".$lastoffset.$ParamsGET."\"><BIG>LAST</BIG></a>";
+-		}
+-	}
+-	// This for backwards when total row count is not calculated.
+-	else {
+-		if($offset>0) {
+-	                echo "<a href=\"".$_SERVER["PHP_SELF"]."?offset=0".$ParamsGET."\"><BIG>FIRST</BIG></a> ";
+-	        }
+-
+-	        // If you are not on one of the first two pages then also show the PREV link
+-	        if($offset>$limit+1) {
+-        	        $prevoffset=$offset-$limit ;
+-	                echo "<a href=\"".$_SERVER["PHP_SELF"]."?offset=".$prevoffset.$ParamsGET."\"><BIG>PREV</BIG></a>\n";
+-	        }
+-		$nextoffset=$offset+$limit;
+-		echo "<a href=\"".$_SERVER["PHP_SELF"]."?offset=".$nextoffset.$ParamsGET."\"><BIG>NEXT</BIG></a> \n";
+-	}
+-}
++	  	if($totalpages>1 && (intval($offset/$limit)+1)!=$totalpages) {
++		   	$lastoffset=($totalpages-1)*$limit;
++		   	echo "<a href=\"".$_SERVER["PHP_SELF"]."?offset=".$lastoffset.$ParamsGET."\"><BIG>LAST</BIG></a>";
++	   	}
++   	}
++   	// This for backwards when total row count is not calculated.
++  	else {
++	   	if($offset>0) {
++		   	echo "<a href=\"".$_SERVER["PHP_SELF"]."?offset=0".$ParamsGET."\"><BIG>FIRST</BIG></a> ";
++	   	}
+ 
+-//------------------------------------------------------------------------
+-// Else just direct the user back to the form
+-//------------------------------------------------------------------------
+-else {
+-	echo "No results found.<br><a href=\"index.php?pageId=searchform\">BACK TO SEARCH</a>";
+-}
++		// If you are not on one of the first two pages then also show the PREV link
++	   	if($offset>$limit+1) {
++		   	$prevoffset=$offset-$limit ;
++		   	echo "<a href=\"".$_SERVER["PHP_SELF"]."?offset=".$prevoffset.$ParamsGET."\"><BIG>PREV</BIG></a>\n";
++	   	}
++	   	$nextoffset=$offset+$limit;
++	   	echo "<a href=\"".$_SERVER["PHP_SELF"]."?offset=".$nextoffset.$ParamsGET."\"><BIG>NEXT</BIG></a> \n";
++   	}
++   	}
+ 
+-//========================================================================
+-// END: BUILDING THE HTML PAGE
+-//========================================================================
++	//------------------------------------------------------------------------
++   	// Else just direct the user back to the form
++   	//------------------------------------------------------------------------
++	   	else {
++		   	echo "No results found.<br><a href=\"index.php?pageId=searchform\">BACK TO SEARCH</a>";
++	   	}
++
++	//========================================================================
++   	// END: BUILDING THE HTML PAGE
++   	//========================================================================
+ ?>
+diff -Nur -Nur php-syslog-ng/html/includes/search.php php-syslog-ng.2.9.8a/html/includes/search.php
+--- php-syslog-ng/html/includes/search.php	2008-05-10 14:38:29.000000000 -0400
++++ php-syslog-ng.2.9.8a/html/includes/search.php	2008-07-22 19:08:34.000000000 -0400
+@@ -220,7 +220,31 @@
+ 	   	}
+ 	   	sort($facilityarray);
+    	}
+-   	//------------------------------------------------------------------------
++
++
++	if(defined('SQZ_ENABLED') && SQZ_ENABLED == TRUE) {
++	   	// Get the SQZ Savings by finding the hosts with more than 1 counter
++	   	// and converting the ratio of hosts to hosts with > 1 to a percentage
++	   	$sql = "SELECT SUM(counter), count(host) from ".DEFAULTLOGTABLE." WHERE counter>1";
++	   	$query = perform_query($sql, $dbLink);
++	   	$array = fetch_array($query);
++		$sumcnt = $array[0];
++	   	$hosts = $array[1];
++		// below is a simple test for new (or empty) databases
++		if (empty($sumcnt)) {
++			$sumcnt = 1;
++		}
++		if (empty($hosts)) {
++			$hosts = 1;
++		}
++	   	$mph = ($sumcnt/$hosts);
++	   	// subtract 100 from the total below to get the opposite effect (savings = 90% rather than 10%)
++	   	// Calculation is to get the percentage of hosts to messages_per_host (convert a ratio to percentage)
++	   	$tot = (100 - (round(100/($mph * 100),4)) * 100);
++	   	$SQZ_SAVINGS = $tot;
++   	}
++
++//------------------------------------------------------------------------
+    	// Print the rest of the form.
+   	//------------------------------------------------------------------------
+    	?>
+@@ -264,7 +288,7 @@
+ 	   	</td></tr></table>
+ 	   	</td><td>
+ 	   	<!--  START: Added by BPK for program list -->
+-	   	<b>PROGRAMS: <?=$programcount?></b>
++	   	<b>PROGRAMS: <?php echo $programcount?></b>
+ 	   	<table align="center" class="formentry"><tr><td>
+ 	   	Include
+ 	   	</td><td>
+@@ -357,7 +381,7 @@
+ 	   	<b>From:</b>
+ 	   	</td><td>
+ 	   	<div id="myDatePickerDiv" width="100">
+-	   	<input type="text" id="date" name="date" onMouseover="return overlib('<TABLE border=1 cellspacing=0 cellpadding=0 width=100%><TR><TD class=tooltip>Click on the Calendar to SELECT the date.<br>The date format is YYYY-MM-DD and the time format is HH:MM:SS.<br>Yesterday, today and now are also valid dates and now is also valid as a time.<br>If you do not get a calendar popup, then manually enter the date as<br>YYYY-MM-DD<br>eg: <?=$caltoday?></TD></TR></TABLE>');" onMouseout="nd();" size="12">
++	   	<input type="text" id="date" name="date" onMouseover="return overlib('<TABLE border=1 cellspacing=0 cellpadding=0 width=100%><TR><TD class=tooltip>Click on the Calendar to SELECT the date.<br>The date format is YYYY-MM-DD and the time format is HH:MM:SS.<br>Yesterday, today and now are also valid dates and now is also valid as a time.<br>If you do not get a calendar popup, then manually enter the date as<br>YYYY-MM-DD<br>eg: <?php echo $caltoday?></TD></TR></TABLE>');" onMouseout="nd();" size="12">
+ 	   	<img src="images/buttons/bs_calendar.gif" onClick="fromdate();"></div>
+ 	   	</td><td>
+ 	   	<input type="text" size=8 maxlength=8 name="time" id="time">
+@@ -365,12 +389,25 @@
+ 	   	<b>To:</b>
+ 	   	</td><td>
+ 	   	<div id="myDatePickerDivR">
+-	   	<input type="text" id="date2" name="date2" onMouseover="return overlib('<TABLE border=1 cellspacing=0 cellpadding=0 width=100%><TR><TD class=tooltip>Click on the Calendar to SELECT the date.<br>The date format is YYYY-MM-DD and the time format is HH:MM:SS.<br>Yesterday, today and now are also valid dates and now is also valid as a time.<br>If you do not get a calendar popup, then manually enter the date as<br>YYYY-MM-DD<br>eg: <?=$caltoday?></TD></TR></TABLE>');" onMouseout="nd();" size="12">
++	   	<input type="text" id="date2" name="date2" onMouseover="return overlib('<TABLE border=1 cellspacing=0 cellpadding=0 width=100%><TR><TD class=tooltip>Click on the Calendar to SELECT the date.<br>The date format is YYYY-MM-DD and the time format is HH:MM:SS.<br>Yesterday, today and now are also valid dates and now is also valid as a time.<br>If you do not get a calendar popup, then manually enter the date as<br>YYYY-MM-DD<br>eg: <?php echo $caltoday?></TD></TR></TABLE>');" onMouseout="nd();" size="12">
+ 	   	<img src="images/buttons/bs_calendar.gif" onClick="todate();"></div>
+ 	   	</td><td>
+ 	   	<input type="text" size=8 maxlength=8 name="time2" id="time2">
+ 	   	</td></tr></table>
+-	   	</td><td>
++	   	<!-- Middle -->
++	   	<?php
++		// Included below as a block instead of coding directly in here.
++		// This is more in preparation for the upcoming v3.0 model
++	   	if(defined('GRAPH_LPD') && GRAPH_LPD == TRUE) {
++	   	echo "</td><td>\n";
++
++		include("blocks/graph-logs_per_day.php");
++
++	   	echo "</td>\n";
++	   	echo "<!-- End Middle -->\n";
++		}
++	   	?>
++	   	<td>
+ 	   	<table align="center" class="formentry">
+ 	   	<tr>
+ 	   	<td><b>RECORDS PER PAGE</b></td>
+@@ -402,7 +439,7 @@
+ 			   	<?php  } ?>
+ 	   	<?php  if ( SQZ_ENABLED == TRUE ) { ?>
+ 		   	<tr>
+-			   	<td><b>Duplicates</b></td>
++			   	<td><b>Duplicates (<?php echo $SQZ_SAVINGS?> %)</b></td>
+ 			   	<td>
+ 			   	<SELECT name="dupop" id="dupop">
+ 			   	<OPTION selected value=""></OPTION>
+@@ -486,11 +523,11 @@
+ 						   	<b>Common Graphs:</b><br>
+ 							   	<SELECT name="graph" onChange="window.location=document.dd.graph.options[document.dd.graph.selectedIndex].value"> 
+ 								<OPTION selected value="#">Select a Graph Type<?php  if ( JPG_DAILY == "ON" ) { ?>
+-								   	<OPTION value="<?php echo $_SERVER["PHP_SELF"]; ?>?table=<?=DEFAULTLOGTABLE?>&excludeHost=1&host2=&date=yesterday&time=&date2=today&topx=10&pageId=Graph">Today</OPTION>
++								   	<OPTION value="<?php echo $_SERVER["PHP_SELF"]; ?>?table=<?php echo DEFAULTLOGTABLE?>&excludeHost=1&host2=&date=yesterday&time=&date2=today&topx=10&pageId=Graph">Today</OPTION>
+ 									   	<?php  } if ( JPG_WEEKLY == "ON" ) { ?>
+-										   	<OPTION value="<?php echo $_SERVER["PHP_SELF"]; ?>?table=<?=MERGELOGTABLE?>&excludeHost=1&host2=&date=<?=$weekArr[1]['sqldate'];?>&time=&date2=today&topx=10&pageId=Graph">This Week</OPTION>
++										   	<OPTION value="<?php echo $_SERVER["PHP_SELF"]; ?>?table=<?php echo MERGELOGTABLE?>&excludeHost=1&host2=&date=<?php echo $weekArr[1]['sqldate'];?>&time=&date2=today&topx=10&pageId=Graph">This Week</OPTION>
+ 											   	<?php  } if ( JPG_MONTHLY == "ON" ) { ?>
+-												   	<OPTION value="<?php echo $_SERVER["PHP_SELF"]; ?>?table=<?=MERGELOGTABLE?>&excludeHost=1&host2=&date=<?=$thismonth?>&time=&date2=today&topx=10&pageId=Graph">This Month</OPTION>
++												   	<OPTION value="<?php echo $_SERVER["PHP_SELF"]; ?>?table=<?php echo MERGELOGTABLE?>&excludeHost=1&host2=&date=<?php echo $thismonth?>&time=&date2=today&topx=10&pageId=Graph">This Month</OPTION>
+ 													   	<?php  } ?>
+ 													   	</SELECT> 
+ 														</FORM> 
+@@ -630,9 +667,27 @@
+ // end date/time restore
+ 
+ // begin limit,topx,orderby,order restore
+-foreach (array('limit', 'topx', 'orderby', 'order') as $var) {
+-   	?> 	
+-		select = document.getElementById('<?php echo $var; ?>');
++foreach (array('limit', 'topx', 'orderby', 'order','dupop') as $var) {
++	// We have to convert the comparison symbols back to their original state for the javascipt to restore
++   	switch ($_SESSION[$var]) {
++	   	case gt:
++		   	$_SESSION[$var] = ">";
++		   	break;
++	   	case lt:
++		   	$_SESSION[$var] = "<";
++		   	break;
++	   	case eq:
++		   	$_SESSION[$var] = "=";
++		   	break;
++	   	case gte:
++		   	$_SESSION[$var] = ">=";
++		   	break;
++	   	case lte:
++		   	$_SESSION[$var] = "<=";
++		   	break;
++   	}
++   	?>
++	   	select = document.getElementById('<?php echo $var; ?>');
+    	for (i=0; i<select.length; i++) {
+ 	   	if (select.options[i].text == '<?php echo $_SESSION[$var]; ?>') {
+ 		   	select.selectedIndex = i;
+@@ -641,6 +696,7 @@
+    	}
+    	<?php
+ } // end limit,topx,orderby,order restore
++echo "document.getElementById('dupcount').value = '".$_SESSION['dupcount']."';\n";
+ 
+ // begin msg restore
+ for ($i=1; $i<=3; $i++) {
+diff -Nur -Nur php-syslog-ng/html/includes/tailresult.php php-syslog-ng.2.9.8a/html/includes/tailresult.php
+--- php-syslog-ng/html/includes/tailresult.php	2008-03-21 10:48:56.000000000 -0400
++++ php-syslog-ng.2.9.8a/html/includes/tailresult.php	2008-08-07 19:21:54.000000000 -0400
+@@ -542,34 +542,37 @@
+ 	   	// 3852752: DRP/0/0/CPU0:Feb 4 20:12:36.098 EST5: SSHD_[65697]: %SECURITY-SSHD-3-ERR_GENERAL: Failed to get DSA public key
+ 	   	// New message using regex above: .*(%.*?:.*):
+ 	   	// SSHD_[65697]: %SECURITY-SSHD-3-ERR_GENERAL: Failed to get DSA public key
+-		$printed = false;
+-		if (CEMDB == "ON") {
+-			$data = $cemdb->lookup($row['msg']);
+-			if($data !== false) {
+-				$info  =     "<b>Name:</b>"                    . $data[0];
+-				$info .= "<br><b>Message:</b> "                . $data[1];
+-				$info .= "<br><b>Explanation:</b> "            . $data[2];
+-				$info .= "<br><b>Action:</b> "                 . $data[3];
+-				$info .= "<br><b>Record last updated on:</b> " . $data[4];
+-				$info = str_replace("\n", "", $info);
+-				$info = htmlentities($info);
+-				$msg = (($row['count'] > 1) ? '<b>'.$row['count'].' *</b> ' : '') . htmlspecialchars($row['msg']);
+-?>				<th  align="left"><A href="#" onmouseover="overlib('<TABLE border=1 cellspacing=0 cellpadding=0 width=100%><TR><TD class=tooltip><?=$info?></TD></TR></TABLE>');" onmouseout=nd(); name ="spacer" ><? echo $msg;?></A></th>
+-<?php			$printed = true;
+-			}
+-			
+-		}
+-		// if CEMDB off or row wasn't found, print it
+-		// this will prevent unnecessary popups and allow filtering via a link
+-		if (!$printed) { 
+-			$msg = htmlspecialchars($row['msg']);
+-			echo "<td>";
+-			if ($row['count'] > 1) echo '<b>'.$row['count'].' *</b> ';
+-			echo "$msg</td>\n";
++	   	$printed = false;
++	   	if (CEMDB == "ON") {
++		   	$data = $cemdb->lookup($row['msg']);
++		   	if($data !== false) {
++			   	$info  =     "<b>Name:</b>"                    . $data[0];
++			   	$info .= "<br><b>Message:</b> "                . $data[1];
++			   	$info .= "<br><b>Explanation:</b> "            . $data[2];
++			   	$info .= "<br><b>Action:</b> "                 . $data[3];
++			   	$info .= "<br><b>Record last updated on:</b> " . $data[4];
++			   	$info = str_replace("\n", "", $info);
++			   	$info = htmlentities($info);
++			   	$msg = (($row['count'] > 1) ? '<b>'.$row['count'].' *</b> ' : '') . htmlspecialchars($row['msg']);
++			   	?>				<th  align="left"><A href="#" onmouseover="overlib('<TABLE border=1 cellspacing=0 cellpadding=0 width=100%><TR><TD class=tooltip><?php echo $info?></TD></TR></TABLE>');" onmouseout=nd(); name ="spacer" ><?php echo $msg;?></A></th>
++				   	<?php			$printed = true;
++		   	}
++
+ 		}
+ 
++	} else {
++		// Moved this to else outside the CEMDB loop so it would print when CEMDB was disabled
++		// REF: http://code.google.com/p/php-syslog-ng/issues/detail?id=68
++	   	if (!$printed) { 
++			// if CEMDB off or row wasn't found, print it
++		   	// this will prevent unnecessary popups and allow filtering via a link
++		   	$msg = htmlspecialchars($row['msg']);
++		   	echo "<td>";
++		   	if ($row['count'] > 1) echo '<b>'.$row['count'].' *</b> ';
++		   	echo "$msg</td>\n";
++	   	}
+ 	}
+-	/* END: CEMDB Mod */
++	   	/* END: CEMDB Mod */
+ 
+ 	echo    "</tr>\n";
+ }
+diff -Nur -Nur php-syslog-ng/html/includes/version.php php-syslog-ng.2.9.8a/html/includes/version.php
+--- php-syslog-ng/html/includes/version.php	2008-05-10 15:42:49.000000000 -0400
++++ php-syslog-ng.2.9.8a/html/includes/version.php	2008-08-07 17:12:41.000000000 -0400
+@@ -26,15 +26,15 @@
+         /** @var int Main Release Level */
+         var $RELEASE = '2.9';
+         /** @var string Development Status */
+-        var $DEV_STATUS = 'Stable';
++        var $DEV_STATUS = 'Pretty Stable';
+         /** @var int Sub Release Level */
+-        var $DEV_LEVEL = '8';
++        var $DEV_LEVEL = '8a';
+         /** @var string Codename */
+         var $CODENAME = 'cdukes';
+         /** @var string Date */
+-        var $RELDATE = '10-May-2008';
++        var $RELDATE = '07-Aug-2008';
+         /** @var string Time */
+-        var $RELTIME = '15:53';
++        var $RELTIME = '17:53';
+         /** @var string Timezone */
+         var $RELTZ = 'EST';
+         /** @var string Copyright Text */
+diff -Nur -Nur php-syslog-ng/html/install/install4.php php-syslog-ng.2.9.8a/html/install/install4.php
+--- php-syslog-ng/html/install/install4.php	2008-05-10 15:05:42.000000000 -0400
++++ php-syslog-ng.2.9.8a/html/install/install4.php	2008-08-07 14:09:50.000000000 -0400
+@@ -185,7 +185,7 @@
+  	$config .= "define('ADMINEMAIL', '$adminEmail');\n";
+ 	$config .= "define('CEMDB', 'ON');\n";
+ 	$config .= "define('CISCO_ERROR_TABLE', 'cemdb');\n";
+-	$config .= "define('DEBUG', '0');\n";
++	$config .= "define('DEBUG', FALSE);\n";
+ 	$config .= "define('SITEURL', '$SITEURL');\n";
+    	$config .= '$regExpArray = array(
+ 		   	// "username"=>"(^\w{4,}\$)",
+@@ -290,6 +290,11 @@
+ 	$config .= "// This is an enhancement change for SqueezeDB functionality\n";
+ 	$config .= "// http://code.google.com/p/php-syslog-ng/issues/detail?id=47\n";
+ 	$config .= "define('SQZ_ENABLED', FALSE);\n";
++	$config .= "//------------------------------------------------------------------------\n";
++	$config .= "// CDUKES - Added front page bar graph for daily log count\n";
++	$config .= "//------------------------------------------------------------------------\n";
++	$config .= "define('GRAPH_LPD', TRUE);\n";
++	$config .= "define('LPD_CACHE', TRUE);\n";
+ 	$config .= "\n?>";
+ 
+ 	if ($canWrite && ($fp = fopen("../config/config.php", "w"))) {
+@@ -334,6 +339,9 @@
+ 		mysql_query( $query );
+ 	$query = "INSERT INTO user (Host, User, Password) VALUES ('$DBhostname','$SLAuserName',password('$SLApassword'));";
+ 		mysql_query( $query );
++	// cdukes - added below since, for some reason, Mysql 5.0 doesn't grant when using GRANT ALL
++	$query = "UPDATE user SET Drop_priv='Y',Alter_priv='Y' where User='$SLAuserName';";
++		mysql_query( $query );
+ 	$query = "INSERT INTO db (Host, Db, User) VALUES ('$DBhostname','$DBname','$SLAuserName');";
+ 		mysql_query( $query );
+ 	$query = "COMMIT;";
+@@ -433,11 +441,11 @@
+ 	  <input type="hidden" name="DBcreated" value="1" />
+ 	  <input type="hidden" name="sitename" value="<?php echo $sitename;?>" />
+ 	  <input type="hidden" name="SITEURL" value="<?php echo $SITEURL;?>" />
+-	  <input type="hidden" name="adminEmail" value="<?=$adminEmail?>" />
+-	  <input type="hidden" name="siteUrl" value="<?=$siteUrl?>" />
+-	  <input type="hidden" name="absolutePath" value="<?=$absolutePath?>" />
+-	  <input type="hidden" name="filePerms" value="<?=$filePerms?>" />
+-	  <input type="hidden" name="dirPerms" value="<?=$dirPerms?>" />
++	  <input type="hidden" name="adminEmail" value="<?php echo $adminEmail?>" />
++	  <input type="hidden" name="siteUrl" value="<?php echo $siteUrl?>" />
++	  <input type="hidden" name="absolutePath" value="<?php echo $absolutePath?>" />
++	  <input type="hidden" name="filePerms" value="<?php echo $filePerms?>" />
++	  <input type="hidden" name="dirPerms" value="<?php echo $dirPerms?>" />
+ 	</form>
+ 	<script>alert('The site url has not been provided'); document.stepBack3.submit();</script>
+ <?php
+diff -Nur -Nur php-syslog-ng/html/install/sql/dbsetup.sql php-syslog-ng.2.9.8a/html/install/sql/dbsetup.sql
+--- php-syslog-ng/html/install/sql/dbsetup.sql	2008-02-28 16:49:46.000000000 -0500
++++ php-syslog-ng.2.9.8a/html/install/sql/dbsetup.sql	2008-08-07 14:55:53.000000000 -0400
+@@ -8,10 +8,17 @@
+ program varchar(15) default NULL,
+ msg text,
+ seq bigint(20) unsigned NOT NULL auto_increment,
+-PRIMARY KEY (seq), KEY host (host),
+-KEY program (program), KEY datetime (datetime),
+-KEY priority (priority), KEY facility (facility)
+-) TYPE=MyISAM;
++counter int(11) NOT NULL default '1',
++fo datetime default NULL,
++lo datetime default NULL,
++PRIMARY KEY  (seq),
++KEY datetime (datetime),
++KEY priority (priority),
++KEY facility (facility),
++KEY program (program),
++KEY host (host)
++) ENGINE=MyISAM;
++
+ 
+ CREATE TABLE users (
+ username varchar(32) default NULL,
+@@ -23,7 +30,7 @@
+ 
+ CREATE TABLE search_cache (
+ tablename varchar(32) DEFAULT NULL,
+-type ENUM('HOST','FACILITY','PROGRAM'),
++type ENUM('HOST','FACILITY','PROGRAM','LPD'),
+ value varchar(128) DEFAULT NULL,
+ updatetime datetime DEFAULT NULL,
+ INDEX type_name (type, tablename)
+@@ -36,7 +43,7 @@
+ INDEX user_action (username, actionname)
+ ) TYPE=MyISAM;
+ 
+-INSERT INTO `user_access` VALUES ('admin','add_user','TRUE'),('admin','edit_user','TRUE'),('admin','reload_cache','TRUE'),('admin','edit_acl','TRUE'),('admin','add_server','TRUE'),('admin','chg_auth','TRUE'),('admin','del_server','TRUE'); 
++INSERT INTO user_access VALUES ('admin','add_user','TRUE'),('admin','edit_user','TRUE'),('admin','reload_cache','TRUE'),('admin','edit_acl','TRUE'),('admin','add_server','TRUE'),('admin','chg_auth','TRUE'),('admin','del_server','TRUE'); 
+ 
+ CREATE TABLE actions (
+ actionname varchar(32) NOT NULL,
+diff -Nur -Nur php-syslog-ng/scripts/dbgen.pl php-syslog-ng.2.9.8a/scripts/dbgen.pl
+--- php-syslog-ng/scripts/dbgen.pl	2008-03-20 23:58:29.000000000 -0400
++++ php-syslog-ng.2.9.8a/scripts/dbgen.pl	2008-07-22 19:07:03.000000000 -0400
+@@ -43,7 +43,6 @@
+ 	$dbhost = $1 if ($var =~ /'DBHOST', '(\w+)'/);
+ 	$dbport = $1 if ($var =~ /'DBPORT', '(\w+)'/);
+ 	$DEBUG = $1 if ($var =~ /'DEBUG', '(\w+)'/);
+-	#$DEBUG = 1;
+ }
+ if ( ! $table ) {
+ 	print "Error: Unable to read config variables from $ngconfig\n";
+@@ -179,7 +178,7 @@
+ 
+ my $c = 0;
+ our @devicelist; 
+-until ($c > 5) {
++until ($c > 50) {
+ 
+ 	# cdukes - 2-28-08: Modified sections below to generate fewer random hostnames, it was a bit overkill :-)
+ 	#my @devs = ("router","switch","server","firewall");
+@@ -215,7 +214,7 @@
+ ### main ###
+ 
+ my $i = 0;
+-my $total = 500;
++my $total = 1500;
+ # Set Loopcount
+ #while (1) # runs in a continuous loop
+ until ($i > $total)
+diff -Nur -Nur php-syslog-ng/scripts/init-d_program php-syslog-ng.2.9.8a/scripts/init-d_program
+--- php-syslog-ng/scripts/init-d_program	1969-12-31 19:00:00.000000000 -0500
++++ php-syslog-ng.2.9.8a/scripts/init-d_program	2008-02-26 21:59:34.000000000 -0500
+@@ -0,0 +1 @@
++SELECT DISTINCT program FROM all_logs WHERE LENGTH(program)<80 AND program RLIKE '^[a-zA-Z]+[a-zA-Z0-9/()._\-]+$';
+diff -Nur -Nur php-syslog-ng/scripts/logrotate.php php-syslog-ng.2.9.8a/scripts/logrotate.php
+--- php-syslog-ng/scripts/logrotate.php	2008-02-27 16:44:04.000000000 -0500
++++ php-syslog-ng.2.9.8a/scripts/logrotate.php	2008-08-07 11:31:37.000000000 -0400
+@@ -38,7 +38,10 @@
+ $query = "SHOW CREATE TABLE ".DEFAULTLOGTABLE;
+ $result = perform_query($query, $dbLink);
+ $row = mysql_fetch_array($result);
+-$createQuery = $row[1];
++
++// CDUKES 7/4/08: Added stripslashes below to fix quoting error
++// Ref: http://groups.google.com/group/php-syslog-ng-support/browse_thread/thread/a41fc933fe705f90
++$createQuery = stripslashes($row[1]);
+ $search = "CREATE TABLE `".DEFAULTLOGTABLE."`";
+ $replace = "CREATE TABLE `temp".DEFAULTLOGTABLE."`";
+ $createQuery = str_replace($search, $replace, $createQuery);
+@@ -133,7 +136,7 @@
+ 
+ 	$result = perform_query($query, $dbLink);
+    	$row = mysql_fetch_array($result);
+-   	$createQuery = $row[1];
++   	$createQuery = stripslashes($row[1]);
+ 
+ 	$oldStr = "CREATE TABLE `".DEFAULTLOGTABLE."`";
+    	$newStr = "CREATE TABLE `".MERGELOGTABLE."`";
+@@ -149,7 +152,9 @@
+    	$createQuery = str_replace($oldStr, $newStr, $createQuery);
+ 
+ 
+-	$createQuery = str_replace('PRIMARY KEY', 'INDEX', $createQuery);
++	// REMOVED below because it was causing an error in newer version of Mysql
++	// Ref: http://bugs.mysql.com/bug.php?id=26881
++	// $createQuery = str_replace('PRIMARY KEY', 'INDEX', $createQuery);
+ 
+ 
+ 	$unionStr = " UNION=(";
+@@ -160,6 +165,7 @@
+    	$unionStr = $unionStr.")";
+ 
+ 	$createQuery = $createQuery.$unionStr;
++// 	die($createQuery);
+ 
+ 	// $query = "FLUSH TABLES";
+    	$flushQuery = "FLUSH TABLES";
+@@ -169,6 +175,7 @@
+    	echo "ok.\n";
+ 	// echo "$createQuery\n";
+ }
++
+ echo "\n".date("Y-m-d H:i:s")."\n";
+ echo "All done!\n";
+ ?>
+diff -Nur -Nur php-syslog-ng/scripts/lpdcache.php php-syslog-ng.2.9.8a/scripts/lpdcache.php
+--- php-syslog-ng/scripts/lpdcache.php	1969-12-31 19:00:00.000000000 -0500
++++ php-syslog-ng.2.9.8a/scripts/lpdcache.php	2008-08-07 17:05:37.000000000 -0400
+@@ -0,0 +1,95 @@
++<?php
++/*
++ * cache.php
++ *
++ * Developed by Clayton Dukes <cdukes@cdukes.com>
++ * Copyright (c) 2008 http://www.gdd.net
++ * Licensed under terms of GNU General Public License.
++ * All rights reserved.
++ *
++ * Changelog:
++ * 2008-08-07 - created
++ *
++ */
++
++/* $Platon$ */
++
++
++/* Cdukes: 08-07-2008
++   Added below to use cache table for filling in graph values on logs per day graph on main page
++   Note that this requires a small modification to the current search_cache table:
++   ALTER TABLE search_cache MODIFY type enum('HOST','FACILITY','PROGRAM','LPD') default NULL
++   By default, this will cache X amount of days based on your LOGROTATERETENTION setting in config.php
++ */
++
++require_once "/www/php-syslog-ng/html/includes/common_funcs.php";
++require_once "/www/php-syslog-ng/html/config/config.php";
++
++$dbLink = db_connect_syslog(DBADMIN, DBADMINPW);
++
++echo "\nStarting LPD Cache\n";
++echo date("Y-m-d H:i:s")."\n";
++
++// First check to see if we have caching turned on
++if(defined('LPD_CACHE') && LPD_CACHE == TRUE) {
++   	echo "Setting daily log counts in ".CACHETABLENAME."\n";
++   	$cacheready = 0;
++   	// Check to make sure the search cache has the LPD field set
++   	$query="DESCRIBE ".CACHETABLENAME;
++   	$result = perform_query($query, $dbLink);
++   	while($row = fetch_array($result)) {
++	   	if (ereg('LPD', $row['Type'])) {
++		   	// 	echo $row['Type']."\n";
++		   	$cacheready = 1;
++	   	}
++   	}
++   	// We're ready to start
++   	if ($cacheready == 1) {
++	   	// check to see if this is a new install (MERGELOGTABLE doesn't exists)
++	   	$check = mysql_query ("SELECT * FROM ".MERGELOGTABLE." LIMIT 0,1"); /* >>limit<< is just to make it faster in case the db is huge */
++	   	if ($check) {
++		   	for($i=0;$i<=LOGROTATERETENTION;$i++) {
++			   	$query="SELECT value as count from ".CACHETABLENAME." WHERE type='LPD' AND updatetime=DATE_SUB(CURDATE(), INTERVAL $i DAY)";
++			   	$result = perform_query($query, $dbLink);
++			   	if(num_rows($result) >= 1) {
++				   	echo "Entry $i already in cache...";
++				   	if ($i == 0) { // We only need to update today's count since (presumably) old logs should not be getting new INSERTs
++					   	echo "UPDATING\n";
++					   	// Test for SqueezeDB function since count fields are different
++					   	if(defined('SQZ_ENABLED') && SQZ_ENABLED == TRUE) {
++							   	$query="SELECT SUM(counter) as value FROM ".MERGELOGTABLE." WHERE datetime BETWEEN DATE_SUB(CURDATE(), INTERVAL $i DAY) AND DATE_SUB(DATE_ADD(CURDATE( ), INTERVAL 1 DAY), INTERVAL $i DAY)";
++					   	} else {
++							   	$query="SELECT count(*) as value FROM ".MERGELOGTABLE." WHERE datetime BETWEEN DATE_SUB(CURDATE(), INTERVAL $i DAY) AND DATE_SUB(DATE_ADD(CURDATE( ), INTERVAL 1 DAY), INTERVAL $i DAY)";
++					   	}
++					   	$result = perform_query($query, $dbLink);
++					   	$row = fetch_array($result);
++					   	$query="UPDATE ".CACHETABLENAME." SET value='".$row['value']."' WHERE type='LPD' AND updatetime=DATE_SUB(CURDATE(), INTERVAL $i DAY) AND DATE_SUB(DATE_ADD(CURDATE( ), INTERVAL 1 DAY), INTERVAL $i DAY)";
++					   	perform_query($query, $dbLink);
++				   	} else {
++					   	echo "No update needed\n";
++				   	}
++			   	} else {
++				   	echo "Entry $i...INSERTing\n";
++					   	$query="INSERT INTO ".CACHETABLENAME." (tablename, type, value, updatetime) SELECT '".MERGELOGTABLE."' as tablename, 'LPD' as type, SUM(counter) as value, DATE_SUB(CURDATE(), INTERVAL $i DAY) as updatetime FROM ".MERGELOGTABLE." WHERE datetime BETWEEN DATE_SUB(CURDATE(), INTERVAL $i DAY) AND DATE_SUB(DATE_ADD(CURDATE( ), INTERVAL 1 DAY), INTERVAL $i DAY)";
++				   	perform_query($query, $dbLink);
++			   	}
++		   	}
++	   	} else {
++		   	echo "You have no merg table, assuming this is a fresh install and updating cache for today only...\n";
++		   	$query="INSERT INTO ".CACHETABLENAME." (tablename, type, value, updatetime) SELECT '".MERGELOGTABLE."' as tablename, 'LPD' as type, SUM(counter) as value, DATE_SUB(CURDATE(), INTERVAL 0 DAY) as updatetime FROM ".DEFAULTLOGTABLE." WHERE datetime BETWEEN DATE_SUB(CURDATE(), INTERVAL 0 DAY) AND DATE_SUB(DATE_ADD(CURDATE( ), INTERVAL 1 DAY), INTERVAL 0 DAY)";
++		   	perform_query($query, $dbLink);
++	   	}
++   	} else {
++	   	echo "ERROR: ".CACHETABLENAME." is missing a column\n";
++	   	echo "You will need to run the following command in mysql before using this script:\n";
++	   	echo "ALTER TABLE ".CACHETABLENAME." MODIFY `type` enum('HOST','FACILITY','PROGRAM','LPD') default NULL;\n";
++   	}
++} else {
++   	echo "\nLPD Cache is not enabled!\n";
++   	echo "Please make sure the following variable is set in your config.php file:\n";
++   	echo "define('LPD_CACHE', FALSE);\n";
++}
++
++echo "\n".date("Y-m-d H:i:s")."\n";
++echo "All done!\n";
++?>
+diff -Nur -Nur php-syslog-ng/scripts/reloadcache.php php-syslog-ng.2.9.8a/scripts/reloadcache.php
+--- php-syslog-ng/scripts/reloadcache.php	2008-02-28 17:06:38.000000000 -0500
++++ php-syslog-ng.2.9.8a/scripts/reloadcache.php	2008-08-07 12:13:55.000000000 -0400
+@@ -30,6 +30,9 @@
+ */
+ 	$tableArray = get_logtables($dbLink);
+ 	foreach($tableArray as $table) {
++		if ($table == MERGELOGTABLE) {
++			continue;
++		}
+ 		echo "Loading the cache with data from: ".$table."\n";
+ 		reload_cache($table, $dbLink);
+ 	}
+@@ -55,5 +58,7 @@
+ }
+ 
+ echo "\n".date("Y-m-d H:i:s")."\n";
+-echo "All done!\n";
++echo "Reloadcache Completed!\n";
++
++include ("lpdcache.php");
+ ?>
+diff -Nur -Nur php-syslog-ng/scripts/SqueezeDB-v2.0.php php-syslog-ng.2.9.8a/scripts/SqueezeDB-v2.0.php
+--- php-syslog-ng/scripts/SqueezeDB-v2.0.php	2008-03-05 01:06:26.000000000 -0500
++++ php-syslog-ng.2.9.8a/scripts/SqueezeDB-v2.0.php	1969-12-31 19:00:00.000000000 -0500
+@@ -1,385 +0,0 @@
+-<?php
+-/*
+- * squeezedb.php
+- *
+- * Developed by Clayton Dukes <cdukes@cdukes.com>
+- * Copyright (c) 2008 http://nms.gdd.net
+- * Licensed under terms of GNU General Public License.
+- * All rights reserved.
+- *
+- * Changelog:
+- * 2008-02-08 - created
+- * 2008-02-10 - Fixed count bug (db inserts were calculating incorrect count)
+- *
+- * Ethan's RCS log:
+- *
+- *  $Log: SqueezeDB-v2.0.php,v $
+- *  Revision 1.3  2008/03/01 06:13:04  ethan
+- *  Implemented database transaction functions.  Lowered $matchpercent from 95 to 90.
+- *
+- *  Revision 1.2  2008/03/01 02:58:10  ethan
+- *  Modified matching strings to include hostname like Clayton's
+- *  original algorithm.
+- *
+- *  Revision 1.1  2008/03/01 01:02:32  ethan
+- *  Initial revision
+- *
+- *
+- */
+-
+-/*
+-   NOTE: Versions of php-syslog-ng 2.9.5d and below will need to alter the database to use this script
+-   ALTER TABLE logs ADD counter INT NOT NULL DEFAULT 1;
+-   ALTER TABLE logs ADD fo datetime default NULL;
+-   ALTER TABLE logs ADD lo datetime default NULL;
+-
+-   Basic Usage:
+-   $s = "/USR/SBIN/CRON[10749]: (root) CMD (php /www/php-syslog-ng/scripts/reloadcache.php >> /var/log/php-syslog-ng/reloadcache.log)";
+-   $s2 = "/USR/SBIN/CRON[10849]: (root) CMD (php /www/php-syslog-ng/scripts/reloadcache.php >> /var/log/php-syslog-ng/reloadcache.log)";
+-   similar_text($s, $s2, $p);
+-   echo "Percent: $p%";
+-
+-   Description:
+-   This calculates the similarity between two strings as described in Oliver [1993]. 
+-   Note that this implementation does not use a stack as in Oliver's pseudo code, but 
+-   recursive calls which may or may not speed up the whole process. Note also that the 
+-   complexity of this algorithm is O(N**3) where N is the length of the longest string.
+-   
+-   Once a match is made, the source row is updated with a "count" of the destination (compared to) row.
+-   It also logs the "first occurance" and "last occurance" of the message so that you can get an idea
+-   of how long the message has been repeating.
+-
+-   Why is this useful?
+-   Running this script makes a HUGE difference on the amount of data you have to store, and subsequently, search through
+-   to get to what you really want - an answer to the # 1 question for most customers: Where are my problem children?
+-
+-   Example:
+-   When tested on a smaller database, I get the following results:
+-   // Starting Row Count = 12832
+-   // Ending Row Count = 1770
+-   // Cleaned 11062 records saving 86 percent
+-   // Squeeze finished in 1318.39662099 seconds (9.7 MPS)
+-   (note: I hope to get this script to run faster/more efficiently in the future, if you have ideas, please let me know!)
+-   (note2: The amount of time it takes to run may vary greatly for you based on hardware 
+-   - it will take a long time on the first run, but subsequent runs should improve markedly.
+-   Update for v2.0 Script:
+-   Starting Row Count = 4271
+-   Ending Row Count = 170
+-   Cleaned 4101 records saving 96 percent
+-   Squeeze finished in 2.07 seconds (2063.29 MPS)
+-
+-   Now, we can quickly pull valuable data from the (much smaller!) databse by doing:
+-   (this will show the top 10 "problem" children")
+-   mysql> SELECT host,counter,msg from logs WHERE counter>1 ORDER BY counter DESC limit 10;
+-
+-   +--------+---------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
+-   | host    | counter | msg
+-   +--------+---------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
+-   | host-a |     668 | 466927:         If Cisco determines that your insertion of non-Cisco memory, WIC cards,
+-   |
+-   | host-b |     644 | 466928:         AIM cards, Network Modules, SPA cards, GBICs or other modules into a
+-   |
+-   | host-c |     614 | 466925:         The module in slot 4 in this router may not be a genuine Cisco product.
+-   |
+-   | host-d |     585 | 466926:         Cisco warranties and support programs only apply to genuine Cisco products.
+-   |
+-   | host-e |     572 | 466929:         Cisco product is the cause of a support issue, Cisco may deny support under
+-   |
+-   | host-f |     385 | 466930:         your warranty or under a Cisco support program such as SmartNet.
+-   |
+-   | host-g |     215 | 467114:         your warranty or under a Cisco support program such as SmartNet.
+-   |
+-   | host-h |     165 | 32574: %CDP-4-DUPLEX_MISMATCH: duplex mismatch discovered on FastEthernet1/26 (not full duplex), with 7200-3 FastEthernet1/0 (full duplex).  
+-   |
+-   | host-i |     133 | /USR/SBIN/CRON[2858]: (root) CMD (php /www/php-syslog-ng/scripts/reloadcache.php >> /var/log/php-syslog-ng/reloadcache.log)
+-   |
+-   | host-j |     133 | /USR/SBIN/CRON[2861]: (root) CMD (php /www/rtpnml-xray/htdocs/cacti/poller.php > /dev/null 2>&1)
+-   |
+-   +--------+---------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+-   10 rows in set (0.01 sec)
+-
+-   As you can see, most of the "spammy" messages are useless and could easily be ignored or deleted (and definitely shouldn't be taking up so many rows!)
+-   Also note that one of the top issues listed is CDP Duplex (gee there's a surprise) - maybe we should go fix that host/device!
+-
+-   This is an excellent way (and much faster) to get your Top X problem children with an added benefit of trimming 85-95% of the fat off your database!"
+-*/
+-
+-$max_sql_in_list_count = 255;
+-
+-include_once "/www/php-syslog-ng/html/includes/common_funcs.php";
+-include_once "/www/php-syslog-ng/html/config/config.php";
+-
+-
+-$time_start = get_microtime();
+-echo "\nStarting Squeeze\n";
+-
+-// Open connection to DB
+-$dbLink = db_connect_syslog(DBADMIN, DBADMINPW);
+-
+-//========================================================================
+-// START: Set level to match on
+-// Possible values are 1 to 99.9999999999
+-// I highly recommend NOT using 1 unless you want to lose all your data...
+-//========================================================================
+-
+-// Original value in Clayton's code (things go much faster at 90):
+-#$matchpercent = 95;
+-$matchpercent = 90;
+-
+-//------------------------------------------------------------------------
+-// Grab all rows by sequence # (the primary key) for processing
+-//------------------------------------------------------------------------
+-// if(defined('COUNT_ROWS') && COUNT_ROWS == TRUE) {
+-//    	$query = "SELECT SQL_CALC_FOUND_ROWS seq from " .DEFAULTLOGTABLE ." ORDER BY seq ASC";
+-// }
+-// else {
+-//    	$query = "SELECT seq from " . DEFAULTLOGTABLE . " ORDER BY seq ASC";
+-// }
+-
+-$query = "SELECT * from " . DEFAULTLOGTABLE . " ORDER BY seq ASC";
+-
+-
+-
+-$result = perform_query($query, $dbLink);
+-
+-//------------------------------------------------------------------------
+-// Get row count
+-//------------------------------------------------------------------------
+-if(defined('COUNT_ROWS') && COUNT_ROWS == TRUE) {
+-	$num_results_array = perform_query("SELECT FOUND_ROWS()", $dbLink);
+-   	$num_results_array = fetch_array($num_results_array);
+-   	$num_rows = $num_results_array[0];
+-} else {
+-   	$num_rows = mysql_num_rows($result);
+-}
+-echo "$num_rows total rows to process\n";
+-
+-
+-
+-//------------------------------------------------------------------------
+-// Begin outer loop
+-// Loop through each record and collect information in a multi-dimensional
+-// associative array keyed by host.
+-//------------------------------------------------------------------------
+-$exact_matches = 0;
+-$similar_matches = 0;
+-$rowcnt = 1;
+-error_reporting(E_ALL);
+-$host_message_cache = array();
+-while ($row = fetch_array($result))
+-{
+-   	//print_r($row); exit();
+-   	$r_host = $row['host'];
+-   	$r_message = $row['msg'];
+-   	$r_seq = $row['seq'];
+-   	$r_entry_timestamp = $row['datetime'];
+-   	$r_fo = $row['fo'];
+-   	$r_lo = $row['lo'];   
+-
+-	if (array_key_exists($r_host, $host_message_cache))
+-   	{
+-	   	// Host already in cache.  Update or create message entry.
+-
+-		$message_found = false;
+-	   	$messages = $host_message_cache[$r_host];
+-
+-		// First check for exact match (on key value).  Otherwise, do the
+-	   	// similar_text() (expensive) check.
+-
+-		if (array_key_exists($r_message, $host_message_cache[$r_host]))
+-	   	{
+-		   	// Found match in existing message set.  Update stats:
+-		   	$host_message_cache[$r_host][$r_message]['child_seqs'][]
+-			   	= $r_seq;
+-		   	$host_message_cache[$r_host][$r_message]['last_message_time']
+-			   	= $r_lo ? $r_lo : $r_entry_timestamp;
+-		   	$message_found = true;
+-		   	$exact_matches++;
+-	   	}
+-	   	else
+-	   	{
+-		   	foreach ($messages as $message => $message_data)
+-		   	{
+-			   	// Note: similar_text should be changed to return the matchpercent,
+-			   	// instead of returning value by side effect.
+-			  	//   (The host . message concatenation is done for consistency
+-			   	//    with Clayton's original algorithm).
+-			  	similar_text($r_host . $r_message, $r_host .$message, $p);	
+-				if ($p >= $matchpercent)
+-			   	{
+-				   	// Found match in existing message set.  Update stats:
+-				   	$host_message_cache[$r_host][$message]['child_seqs'][]
+-					   	= $r_seq;
+-				   	$host_message_cache[$r_host][$message]['last_message_time']
+-					   	= $r_lo ? $r_lo : $r_entry_timestamp;
+-
+-					$message_found = true;
+-				   	$similar_matches++;
+-				   	break;
+-			   	}
+-		   	}
+-	   	}
+-	   	if (!$message_found)
+-	   	{
+-		   	// Found not match in existing message set.  Create new entry.
+-		  	$message_info = array('parent_seq' => $r_seq,
+-				   	'child_seqs' => array(),
+-				   	'first_message_time' => $r_entry_timestamp,
+-				   	'last_message_time' => $r_lo ? $r_lo : $r_entry_timestamp);
+-		   	$host_message_cache[$r_host][$r_message] = $message_info;
+-	   	}
+-   	}
+-   	else
+-   	{
+-	   	// Host didn't exist in cache, so create an entry for it
+-
+-		$message_info = array('parent_seq' => $r_seq,
+-			   	'child_seqs' => array(),
+-			   	'first_message_time' => $r_entry_timestamp,
+-			   	'last_message_time' => $r_lo ? $r_lo : $r_entry_timestamp);
+-	   	$host_message_cache[$r_host][$r_message] = $message_info;
+-
+-	}
+-
+-	if (($rowcnt++ % 100 == 0))
+-   	{
+-	   	//   		print_r($host_message_cache);
+-	   	//   		exit();
+-	   	print ' . ';
+-   	}
+-
+-}
+-
+-#print_r ($host_message_cache); exit;
+-
+-// We now have all of the information in the $host_message_cache.  Loop over
+-// each message for each host and modify the database accordingly by
+-// updating the message parent row's stats and deleting child rows.
+-
+-// We are doing a lot of database modification.  It should all be part of the same transaction.
+-
+-print "\n\n";
+-print "Debug: Log table analysis complete.\n";
+-print "Debug: Exact log message matches: $exact_matches\n";
+-print "Debug: Similar log message matches: $similar_matches\n";
+-
+-
+-print "Debug: Starting log table modifications...\n";
+-$db_time_start = get_microtime();
+-
+-begin_transaction($dbLink);
+-foreach ($host_message_cache as $host => $messages)
+-{
+-   	foreach ($messages as $message => $message_data)
+-   	{
+-	   	if (!$message_data['child_seqs'])
+-		   	continue; // Solitary message with no associations.
+-
+-
+-		$count = count($message_data['child_seqs']) + 1; // Children + parent
+-	   	$fo = $message_data['first_message_time'];
+-	   	$lo = $message_data['last_message_time'];
+-	   	$parent_seq = $message_data['parent_seq'];
+-	   	$query = "UPDATE " . DEFAULTLOGTABLE . "  SET counter = $count, fo = '$fo', lo = '$lo' WHERE seq = '$parent_seq'";
+-
+-		// Update the parent record to reflect count and start, end times.
+-	  	if (! perform_query($query, $dbLink)) // Assuming that your perform_query returns false on error
+-	   	{
+-		   	rollback($dbLink);
+-		   	die("Error: Update failed.");
+-	   	}
+-
+-		// Delete all the child records.
+-
+-		// Create a set of SQL IN lists (e.g. "('seq1', 'seq2',...).  You
+-	   	// need a set because there can be limits of 255 IN list members.
+-	  	$lists = array_chunk($message_data['child_seqs'], $max_sql_in_list_count);
+-	   	foreach ($lists as $list)
+-	   	{
+-		   	$in_list = create_sql_in_list($list);
+-		   	$query = "DELETE FROM " . DEFAULTLOGTABLE . " WHERE seq IN $in_list";
+-		   	if (! perform_query($query, $dbLink)) // Assuming that your perform_query returns false on error
+-		   	{
+-			   	rollback($dbLink);
+-			   	die("Error: Delete failed.");
+-		   	}
+-	   	}
+-   	}
+-}
+-
+-commit($dbLink);
+-
+-$dbsecs = get_microtime() - $db_time_start;
+-print "Debug: Log table modifications complete in $dbsecs seconds...\n";
+-
+-//------------------------------------------------------------------------
+-// Gather and spit out some stats
+-//------------------------------------------------------------------------
+-
+-$query = 'SELECT count(*) AS "count" from ' . DEFAULTLOGTABLE ;
+-$result = perform_query($query, $dbLink);
+-$row = fetch_array($result);
+-$num_rows_after = $row['count'];
+-$savings = $num_rows - $num_rows_after;
+-$savings_p = round( ($savings/$num_rows)*100, 0 );
+-echo "\nStarting Row Count = $num_rows\n";
+-echo "Ending Row Count = $num_rows_after\n";
+-echo "Cleaned $savings records saving $savings_p percent\n";
+-$time_end = get_microtime();
+-$exetime = round($time_end - $time_start, 2);
+-$mps = round($num_rows/$exetime, 2);
+-echo "Squeeze finished in ".$exetime." seconds ($mps MPS)\n";
+-//========================================================================
+-// END
+-//========================================================================
+-
+-///// Functions (should probably be put in include file common functions
+-
+-/**
+- * Create an SQL in list '(val1,val2,...,valn)' from an array.  If any
+- * elements are not numeric, treat all as characters.
+- * One may also use the $force_string arg to force a string type.
+- */
+-function create_sql_in_list($vals, $force_string = false)
+-{
+-   	$is_str = array_filter($vals,
+-		   	create_function('$val', 'return (! is_numeric($val));'));
+-
+-	$is_str = $is_str || $force_string;
+-   	$res = '(';
+-   	$sep = '';
+-   	foreach ($vals as $val)
+-   	{
+-	   	$res .= $sep;
+-	   	if ($is_str)
+-		   	$res .= "'";
+-	   	$res .= $val;
+-	   	if ($is_str)
+-		   	$res .= "'";
+-	   	$sep = ',';
+-   	}
+-   	$res .= ')';
+-   	return $res;
+-}
+-
+-/**
+- * Database transaction functions.
+- *
+- *  
+- */
+-
+-function begin_transaction($dbLink)
+-{
+-   	mysql_query('begin');
+-}
+-
+-function rollback($dbLink)
+-{
+-   	mysql_query('rollback');
+-}
+-
+-function commit($dbLink)
+-{
+-   	mysql_query('commit');
+-}
+-?>
+diff -Nur -Nur php-syslog-ng/scripts/SqueezeDB-v2.2.php php-syslog-ng.2.9.8a/scripts/SqueezeDB-v2.2.php
+--- php-syslog-ng/scripts/SqueezeDB-v2.2.php	1969-12-31 19:00:00.000000000 -0500
++++ php-syslog-ng.2.9.8a/scripts/SqueezeDB-v2.2.php	2008-07-23 16:04:54.000000000 -0400
+@@ -0,0 +1,442 @@
++<?php
++/*
++ * squeezedb.php
++ *
++ * Developed by Clayton Dukes <cdukes@cdukes.com>
++ * Copyright (c) 2008 http://nms.gdd.net
++ * Licensed under terms of GNU General Public License.
++ * All rights reserved.
++ *
++ * Changelog:
++ * 2008-02-08 - created
++ * 2008-02-10 - Fixed count bug (db inserts were calculating incorrect count)
++
++ *  $Log: SqueezeDB-v2.2.php,v $
++ *  Revision 2.2  2008/07/21 06:13:04  cdukes
++ *  Added test for max iterations due to excessive memory consumption in arrays for large systems.
++ *  Set $max to whatever your system can handle
++ *  Memory usage will print during run so you can test for your needs.
++ *  This will allow you to run the script more often to deduplicate messages on larger systems
++ *  For example, you can now just create a small shell script instead of cron to run every x seconds:
++ * i=0
++ * while [ $i -le 1000000 ]
++ *  do
++ *    php /www/php-syslog-ng/scripts/SqueezeDB-v2.2.php
++ *	    sleep 3
++ *		    i=`expr $i + 1`
++ *			done
++ *
++ *
++ * Ethan's RCS log:
++ *
++ *  $Log: SqueezeDB-v2.0.php,v $
++ *  Revision 1.3  2008/03/01 06:13:04  ethan
++ *  Implemented database transaction functions.  Lowered $matchpercent from 95 to 90.
++ *
++ *  Revision 1.2  2008/03/01 02:58:10  ethan
++ *  Modified matching strings to include hostname like Clayton's
++ *  original algorithm.
++ *
++ *  Revision 1.1  2008/03/01 01:02:32  ethan
++ *  Initial revision
++ *
++ *
++ */
++
++/*
++   NOTE: Versions of php-syslog-ng 2.9.5d and below will need to alter the database to use this script
++   ALTER TABLE logs ADD counter INT NOT NULL DEFAULT 1;
++   ALTER TABLE logs ADD fo datetime default NULL;
++   ALTER TABLE logs ADD lo datetime default NULL;
++
++   Basic Usage:
++   $s = "/USR/SBIN/CRON[10749]: (root) CMD (php /www/php-syslog-ng/scripts/reloadcache.php >> /var/log/php-syslog-ng/reloadcache.log)";
++   $s2 = "/USR/SBIN/CRON[10849]: (root) CMD (php /www/php-syslog-ng/scripts/reloadcache.php >> /var/log/php-syslog-ng/reloadcache.log)";
++   similar_text($s, $s2, $p);
++   echo "Percent: $p%";
++
++   Description:
++   This calculates the similarity between two strings as described in Oliver [1993]. 
++   Note that this implementation does not use a stack as in Oliver's pseudo code, but 
++   recursive calls which may or may not speed up the whole process. Note also that the 
++   complexity of this algorithm is O(N**3) where N is the length of the longest string.
++   
++   Once a match is made, the source row is updated with a "count" of the destination (compared to) row.
++   It also logs the "first occurance" and "last occurance" of the message so that you can get an idea
++   of how long the message has been repeating.
++
++   Why is this useful?
++   Running this script makes a HUGE difference on the amount of data you have to store, and subsequently, search through
++   to get to what you really want - an answer to the # 1 question for most customers: Where are my problem children?
++
++   Example:
++   When tested on a smaller database, I get the following results:
++   // Starting Row Count = 12832
++   // Ending Row Count = 1770
++   // Cleaned 11062 records saving 86 percent
++   // Squeeze finished in 1318.39662099 seconds (9.7 MPS)
++   (note: I hope to get this script to run faster/more efficiently in the future, if you have ideas, please let me know!)
++   (note2: The amount of time it takes to run may vary greatly for you based on hardware 
++   - it will take a long time on the first run, but subsequent runs should improve markedly.
++   Update for v2.0 Script:
++   Starting Row Count = 4271
++   Ending Row Count = 170
++   Cleaned 4101 records saving 96 percent
++   Squeeze finished in 2.07 seconds (2063.29 MPS)
++
++   Now, we can quickly pull valuable data from the (much smaller!) databse by doing:
++   (this will show the top 10 "problem" children")
++   mysql> SELECT host,counter,msg from logs WHERE counter>1 ORDER BY counter DESC limit 10;
++
++   +--------+---------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
++   | host    | counter | msg
++   +--------+---------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
++   | host-a |     668 | 466927:         If Cisco determines that your insertion of non-Cisco memory, WIC cards,
++   |
++   | host-b |     644 | 466928:         AIM cards, Network Modules, SPA cards, GBICs or other modules into a
++   |
++   | host-c |     614 | 466925:         The module in slot 4 in this router may not be a genuine Cisco product.
++   |
++   | host-d |     585 | 466926:         Cisco warranties and support programs only apply to genuine Cisco products.
++   |
++   | host-e |     572 | 466929:         Cisco product is the cause of a support issue, Cisco may deny support under
++   |
++   | host-f |     385 | 466930:         your warranty or under a Cisco support program such as SmartNet.
++   |
++   | host-g |     215 | 467114:         your warranty or under a Cisco support program such as SmartNet.
++   |
++   | host-h |     165 | 32574: %CDP-4-DUPLEX_MISMATCH: duplex mismatch discovered on FastEthernet1/26 (not full duplex), with 7200-3 FastEthernet1/0 (full duplex).  
++   |
++   | host-i |     133 | /USR/SBIN/CRON[2858]: (root) CMD (php /www/php-syslog-ng/scripts/reloadcache.php >> /var/log/php-syslog-ng/reloadcache.log)
++   |
++   | host-j |     133 | /USR/SBIN/CRON[2861]: (root) CMD (php /www/rtpnml-xray/htdocs/cacti/poller.php > /dev/null 2>&1)
++   |
++   +--------+---------+---------------------------------------------------------------------------------------------------------------------------------------------------+
++   10 rows in set (0.01 sec)
++
++   As you can see, most of the "spammy" messages are useless and could easily be ignored or deleted (and definitely shouldn't be taking up so many rows!)
++   Also note that one of the top issues listed is CDP Duplex (gee there's a surprise) - maybe we should go fix that host/device!
++
++   This is an excellent way (and much faster) to get your Top X problem children with an added benefit of trimming 85-95% of the fat off your database!"
++*/
++
++$max_sql_in_list_count = 255;
++
++include_once "/www/php-syslog-ng/html/includes/common_funcs.php";
++include_once "/www/php-syslog-ng/html/config/config.php";
++
++
++$time_start = get_microtime();
++echo "\nStarting Squeeze\n";
++
++// Open connection to DB
++$dbLink = db_connect_syslog(DBADMIN, DBADMINPW);
++
++//========================================================================
++// START: Set level to match on
++// Possible values are 1 to 99.9999999999
++// I highly recommend NOT using 1 unless you want to lose all your data...
++//========================================================================
++
++// Original value in Clayton's code (things go much faster at 90):
++#$matchpercent = 95;
++$matchpercent = 86;
++// CDUKES: Jun 18, 2008: Changed this to 86%, it seemed to work much better for me in finding duplicate rows
++
++//------------------------------------------------------------------------
++// Grab all rows by sequence # (the primary key) for processing
++//------------------------------------------------------------------------
++// if(defined('COUNT_ROWS') && COUNT_ROWS == TRUE) {
++//    	$query = "SELECT SQL_CALC_FOUND_ROWS seq from " .DEFAULTLOGTABLE ." ORDER BY seq ASC";
++// }
++// else {
++//    	$query = "SELECT seq from " . DEFAULTLOGTABLE . " ORDER BY seq ASC";
++// }
++
++
++// Set a limit to avoid puking
++// $limit = "LIMIT 50000";
++
++$query = "SELECT * from " . DEFAULTLOGTABLE . " ORDER BY seq ASC $limit";
++
++
++
++$result = perform_query($query, $dbLink);
++
++//------------------------------------------------------------------------
++// Get row count
++//------------------------------------------------------------------------
++if(defined('COUNT_ROWS') && COUNT_ROWS == TRUE) {
++	$num_results_array = perform_query("SELECT FOUND_ROWS()", $dbLink);
++   	$num_results_array = fetch_array($num_results_array);
++   	$num_rows = $num_results_array[0];
++} else {
++   	$num_rows = mysql_num_rows($result);
++}
++echo "$num_rows total rows to process\n";
++
++
++
++//------------------------------------------------------------------------
++// Begin outer loop
++// Loop through each record and collect information in a multi-dimensional
++// associative array keyed by host.
++//------------------------------------------------------------------------
++$exact_matches = 0;
++$similar_matches = 0;
++$rowcnt = 1;
++error_reporting(E_ALL);
++$host_message_cache = array();
++$max = 8000; // Max messages to process at a single time
++while ($row = fetch_array($result)) {
++   	if (count($host_message_cache, COUNT_RECURSIVE) < $max ) {
++	   	//print_r($row); exit();
++	   	$r_host = $row['host'];
++	   	$r_message = $row['msg'];
++	   	$r_seq = $row['seq'];
++	   	$r_entry_timestamp = $row['datetime'];
++	   	$r_fo = $row['fo'];
++	   	$r_lo = $row['lo']; 
++
++		if (array_key_exists($r_host, $host_message_cache))
++	   	{
++		   	// Host already in cache.  Update or create message entry.
++
++			$message_found = false;
++		   	$messages = $host_message_cache[$r_host];
++
++			// First check for exact match (on key value).  Otherwise, do the
++		   	// similar_text() (expensive) check.
++
++			if (array_key_exists($r_message, $host_message_cache[$r_host]))
++		   	{
++			   	// Found match in existing message set.  Update stats:
++			   	// echo "Found match in existing message set.  Update stats...\n";
++			   	$host_message_cache[$r_host][$r_message]['child_seqs'][]
++				   	= $r_seq;
++			   	$host_message_cache[$r_host][$r_message]['last_message_time']
++				   	= $r_lo ? $r_lo : $r_entry_timestamp;
++			   	$message_found = true;
++			   	$exact_matches++;
++		   	}
++		   	else
++		   	{
++			   	$tc=0;
++			   	foreach ($messages as $message => $message_data)
++			   	{
++				   	// Note: similar_text should be changed to return the matchpercent,
++				   	// instead of returning value by side effect.
++				  	//   (The host . message concatenation is done for consistency
++				   	//    with Clayton's original algorithm).
++				  	similar_text("$r_host,$r_message", "$r_host,$message", $p);	
++					/*
++					   if ($r_host = "11.16.254.160") { 
++					   echo "DEBUG $p\n\t$r_host,$r_message\n\t$r_host,$message\n";
++					   }
++					   if ($tc > 120) {
++					   exit;
++					   }
++					 */
++				   	if ($p >= $matchpercent)
++				   	{
++					   	// Found match in existing message set.  Update stats:
++					   	// echo "MATCH: $r_host,$r_message", "$r_host,$message, $p\n ";
++					   	$host_message_cache[$r_host][$message]['child_seqs'][]
++						   	= $r_seq;
++					   	$host_message_cache[$r_host][$message]['last_message_time']
++						   	= $r_lo ? $r_lo : $r_entry_timestamp;
++
++						$message_found = true;
++					   	$similar_matches++;
++					   	// echo "$similar_matches matches\n";
++					   	break;
++				   	}
++				   	$tc++;
++			   	}
++		   	}
++		   	if (!$message_found)
++		   	{
++			   	// Found not match in existing message set.  Create new entry.
++			  	$message_info = array('parent_seq' => $r_seq,
++					   	'child_seqs' => array(),
++					   	'first_message_time' => $r_entry_timestamp,
++					   	'last_message_time' => $r_lo ? $r_lo : $r_entry_timestamp);
++			   	$host_message_cache[$r_host][$r_message] = $message_info;
++		   	}
++	   	}
++	   	else
++	   	{
++		   	// Host didn't exist in cache, so create an entry for it
++
++			$message_info = array('parent_seq' => $r_seq,
++				   	'child_seqs' => array(),
++				   	'first_message_time' => $r_entry_timestamp,
++				   	'last_message_time' => $r_lo ? $r_lo : $r_entry_timestamp);
++		   	$host_message_cache[$r_host][$r_message] = $message_info;
++
++		}
++
++		if (($rowcnt++ % 1000 == 0))
++	   	{
++		   	// print_r($host_message_cache);
++		   	// print " $rowcnt\n ";
++		   	echo "Row $rowcnt Memory used: ".number_format(memory_get_usage())." bytes\n";
++		   	// exit();
++	   	}
++
++	} 
++	else {
++	   	// print_r($host_message_cache);
++	   	break;
++   	}
++}
++
++#print_r ($host_message_cache); exit;
++
++// We now have all of the information in the $host_message_cache.  Loop over
++// each message for each host and modify the database accordingly by
++// updating the message parent row's stats and deleting child rows.
++
++// We are doing a lot of database modification.  It should all be part of the same transaction.
++
++print "\n\n";
++print "Debug: Log table analysis complete.\n";
++print "Debug: Exact log message matches: $exact_matches\n";
++print "Debug: Similar log message matches: $similar_matches\n";
++
++
++print "Debug: Starting log table modifications...\n";
++$db_time_start = get_microtime();
++
++begin_transaction($dbLink);
++foreach ($host_message_cache as $host => $messages)
++{
++   	foreach ($messages as $message => $message_data)
++   	{
++	   	if (!$message_data['child_seqs'])
++		   	continue; // Solitary message with no associations.
++
++
++		// Bugfix: http://code.google.com/p/php-syslog-ng/issues/detail?id=70
++	   	// $count = count($message_data['child_seqs']) + 1; // Children + parent
++	   	$parent_seq = $message_data['parent_seq'];
++	   	$query_count = "SELECT counter FROM " . DEFAULTLOGTABLE . " WHERE seq = '$parent_seq'";
++	   	$result_count = perform_query($query_count, $dbLink);
++	   	$row_count = fetch_array($result_count);
++	   	$r_counter = $row_count['counter'];
++
++		if (($r_counter == '') || ($r_counter == 0))
++	   	{
++		   	$count = count($message_data['child_seqs']) + 1; // Children + parent
++	   	}
++	   	else
++	   	{
++		   	$count = count($message_data['child_seqs']) + $r_counter; // Children + parent
++	   	}
++	   	$fo = $message_data['first_message_time'];
++	   	$lo = $message_data['last_message_time'];
++	   	$query = "UPDATE " . DEFAULTLOGTABLE . "  SET counter = $count, fo = '$fo', lo = '$lo' WHERE seq = '$parent_seq'";
++
++		// Update the parent record to reflect count and start, end times.
++	  	if (! perform_query($query, $dbLink)) // Assuming that your perform_query returns false on error
++	   	{
++		   	rollback($dbLink);
++		   	die("Error: Update failed.");
++	   	}
++
++		// Delete all the child records.
++
++		// Create a set of SQL IN lists (e.g. "('seq1', 'seq2',...).  You
++	   	// need a set because there can be limits of 255 IN list members.
++	  	// print "Splitting lists into array of 255\n";
++	   	$lists = array_chunk($message_data['child_seqs'], $max_sql_in_list_count);
++	   	foreach ($lists as $list)
++	   	{
++		   	$in_list = create_sql_in_list($list);
++		   	$query = "DELETE FROM " . DEFAULTLOGTABLE . " WHERE seq IN $in_list";
++		   	// print "Processing in list\n";
++		   	if (! perform_query($query, $dbLink)) // Assuming that your perform_query returns false on error
++		   	{
++			   	rollback($dbLink);
++			   	die("Error: Delete failed.");
++		   	}
++	   	}
++   	}
++}
++
++commit($dbLink);
++
++$dbsecs = get_microtime() - $db_time_start;
++print "Debug: Log table modifications complete in $dbsecs seconds...\n";
++
++//------------------------------------------------------------------------
++// Gather and spit out some stats
++//------------------------------------------------------------------------
++
++$query = 'SELECT count(*) AS "count" from ' . DEFAULTLOGTABLE ;
++$result = perform_query($query, $dbLink);
++$row = fetch_array($result);
++$num_rows_after = $row['count'];
++$savings = $num_rows - $num_rows_after;
++$savings_p = round( ($savings/$num_rows)*100, 0 );
++echo "\nStarting Row Count = $num_rows\n";
++echo "Ending Row Count = $num_rows_after\n";
++echo "Cleaned $savings records saving $savings_p percent\n";
++$time_end = get_microtime();
++$exetime = round($time_end - $time_start, 2);
++$mps = round($num_rows/$exetime, 2);
++echo "Squeeze finished in ".$exetime." seconds ($mps MPS)\n";
++//========================================================================
++// END
++//========================================================================
++
++///// Functions (should probably be put in include file common functions
++
++/**
++ * Create an SQL in list '(val1,val2,...,valn)' from an array.  If any
++ * elements are not numeric, treat all as characters.
++ * One may also use the $force_string arg to force a string type.
++ */
++function create_sql_in_list($vals, $force_string = false)
++{
++   	$is_str = array_filter($vals,
++		   	create_function('$val', 'return (! is_numeric($val));'));
++
++	$is_str = $is_str || $force_string;
++   	$res = '(';
++   	$sep = '';
++   	foreach ($vals as $val)
++   	{
++	   	$res .= $sep;
++	   	if ($is_str)
++		   	$res .= "'";
++	   	$res .= $val;
++	   	if ($is_str)
++		   	$res .= "'";
++	   	$sep = ',';
++   	}
++   	$res .= ')';
++   	return $res;
++}
++
++/**
++ * Database transaction functions.
++ *
++ *  
++ */
++
++function begin_transaction($dbLink)
++{
++   	mysql_query('begin');
++}
++
++function rollback($dbLink)
++{
++   	mysql_query('rollback');
++}
++
++function commit($dbLink)
++{
++   	mysql_query('commit');
++}
++?>
+diff -Nur -Nur php-syslog-ng/scripts/SqueezeDB-v2.3.php php-syslog-ng.2.9.8a/scripts/SqueezeDB-v2.3.php
+--- php-syslog-ng/scripts/SqueezeDB-v2.3.php	1969-12-31 19:00:00.000000000 -0500
++++ php-syslog-ng.2.9.8a/scripts/SqueezeDB-v2.3.php	2008-08-07 17:59:43.000000000 -0400
+@@ -0,0 +1,457 @@
++<?php
++/*
++ * squeezedb.php
++ *
++ * Developed by Clayton Dukes <cdukes@cdukes.com>
++ * Copyright (c) 2008 http://nms.gdd.net
++ * Licensed under terms of GNU General Public License.
++ * All rights reserved.
++ *
++ * Changelog:
++ * 2008-02-08 - created
++ * 2008-02-10 - Fixed count bug (db inserts were calculating incorrect count)
++
++ *  $Log: SqueezeDB-v2.3.php,v $
++ *  Revision 2.3  2008/08/07 06:13:04  cdukes
++ *  REF: http://code.google.com/p/php-syslog-ng/issues/detail?id=75
++ *  Added test for command line argument (ARGV)
++ *  This will alow passing a variable into the script to only run on select databases
++ *  Example:
++ *  php SqueezeDB.php logs20080807
++ *  Would tell the script to only run Squeeze on the Aug 07, 2008 log table
++ * 
++ *  $Log: SqueezeDB-v2.2.php,v $
++ *  Revision 2.2  2008/07/21 06:13:04  cdukes
++ *  Added test for max iterations due to excessive memory consumption in arrays for large systems.
++ *  Set $max to whatever your system can handle
++ *  Memory usage will print during run so you can test for your needs.
++ *  This will allow you to run the script more often to deduplicate messages on larger systems
++ *  For example, you can now just create a small shell script instead of cron to run every x seconds:
++ * i=0
++ * while [ $i -le 1000000 ]
++ *  do
++ *    php /www/php-syslog-ng/scripts/SqueezeDB-v2.2.php
++ *	    sleep 3
++ *		    i=`expr $i + 1`
++ *			done
++ *
++ *
++ * Ethan's RCS log:
++ *
++ *  $Log: SqueezeDB-v2.0.php,v $
++ *  Revision 1.3  2008/03/01 06:13:04  ethan
++ *  Implemented database transaction functions.  Lowered $matchpercent from 95 to 90.
++ *
++ *  Revision 1.2  2008/03/01 02:58:10  ethan
++ *  Modified matching strings to include hostname like Clayton's
++ *  original algorithm.
++ *
++ *  Revision 1.1  2008/03/01 01:02:32  ethan
++ *  Initial revision
++ *
++ *
++ */
++
++/*
++   NOTE: Versions of php-syslog-ng 2.9.5d and below will need to alter the database to use this script
++   ALTER TABLE logs ADD counter INT NOT NULL DEFAULT 1;
++   ALTER TABLE logs ADD fo datetime default NULL;
++   ALTER TABLE logs ADD lo datetime default NULL;
++
++   Basic Usage:
++   $s = "/USR/SBIN/CRON[10749]: (root) CMD (php /www/php-syslog-ng/scripts/reloadcache.php >> /var/log/php-syslog-ng/reloadcache.log)";
++   $s2 = "/USR/SBIN/CRON[10849]: (root) CMD (php /www/php-syslog-ng/scripts/reloadcache.php >> /var/log/php-syslog-ng/reloadcache.log)";
++   similar_text($s, $s2, $p);
++   echo "Percent: $p%";
++
++   Description:
++   This calculates the similarity between two strings as described in Oliver [1993]. 
++   Note that this implementation does not use a stack as in Oliver's pseudo code, but 
++   recursive calls which may or may not speed up the whole process. Note also that the 
++   complexity of this algorithm is O(N**3) where N is the length of the longest string.
++   
++   Once a match is made, the source row is updated with a "count" of the destination (compared to) row.
++   It also logs the "first occurance" and "last occurance" of the message so that you can get an idea
++   of how long the message has been repeating.
++
++   Why is this useful?
++   Running this script makes a HUGE difference on the amount of data you have to store, and subsequently, search through
++   to get to what you really want - an answer to the # 1 question for most customers: Where are my problem children?
++
++   Example:
++   When tested on a smaller database, I get the following results:
++   // Starting Row Count = 12832
++   // Ending Row Count = 1770
++   // Cleaned 11062 records saving 86 percent
++   // Squeeze finished in 1318.39662099 seconds (9.7 MPS)
++   (note: I hope to get this script to run faster/more efficiently in the future, if you have ideas, please let me know!)
++   (note2: The amount of time it takes to run may vary greatly for you based on hardware 
++   - it will take a long time on the first run, but subsequent runs should improve markedly.
++   Update for v2.0 Script:
++   Starting Row Count = 4271
++   Ending Row Count = 170
++   Cleaned 4101 records saving 96 percent
++   Squeeze finished in 2.07 seconds (2063.29 MPS)
++
++   Now, we can quickly pull valuable data from the (much smaller!) databse by doing:
++   (this will show the top 10 "problem" children")
++   mysql> SELECT host,counter,msg from logs WHERE counter>1 ORDER BY counter DESC limit 10;
++
++   +--------+---------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
++   | host    | counter | msg
++   +--------+---------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
++   | host-a |     668 | 466927:         If Cisco determines that your insertion of non-Cisco memory, WIC cards,
++   |
++   | host-b |     644 | 466928:         AIM cards, Network Modules, SPA cards, GBICs or other modules into a
++   |
++   | host-c |     614 | 466925:         The module in slot 4 in this router may not be a genuine Cisco product.
++   |
++   | host-d |     585 | 466926:         Cisco warranties and support programs only apply to genuine Cisco products.
++   |
++   | host-e |     572 | 466929:         Cisco product is the cause of a support issue, Cisco may deny support under
++   |
++   | host-f |     385 | 466930:         your warranty or under a Cisco support program such as SmartNet.
++   |
++   | host-g |     215 | 467114:         your warranty or under a Cisco support program such as SmartNet.
++   |
++   | host-h |     165 | 32574: %CDP-4-DUPLEX_MISMATCH: duplex mismatch discovered on FastEthernet1/26 (not full duplex), with 7200-3 FastEthernet1/0 (full duplex).  
++   |
++   | host-i |     133 | /USR/SBIN/CRON[2858]: (root) CMD (php /www/php-syslog-ng/scripts/reloadcache.php >> /var/log/php-syslog-ng/reloadcache.log)
++   |
++   | host-j |     133 | /USR/SBIN/CRON[2861]: (root) CMD (php /www/rtpnml-xray/htdocs/cacti/poller.php > /dev/null 2>&1)
++   |
++   +--------+---------+---------------------------------------------------------------------------------------------------------------------------------------------------+
++   10 rows in set (0.01 sec)
++
++   As you can see, most of the "spammy" messages are useless and could easily be ignored or deleted (and definitely shouldn't be taking up so many rows!)
++   Also note that one of the top issues listed is CDP Duplex (gee there's a surprise) - maybe we should go fix that host/device!
++
++   This is an excellent way (and much faster) to get your Top X problem children with an added benefit of trimming 85-95% of the fat off your database!"
++*/
++
++$max_sql_in_list_count = 255;
++
++include_once "/www/php-syslog-ng/html/includes/common_funcs.php";
++include_once "/www/php-syslog-ng/html/config/config.php";
++
++
++$time_start = get_microtime();
++echo "\nStarting Squeeze\n";
++
++// Open connection to DB
++$dbLink = db_connect_syslog(DBADMIN, DBADMINPW);
++
++//========================================================================
++// START: Set level to match on
++// Possible values are 1 to 99.9999999999
++// I highly recommend NOT using 1 unless you want to lose all your data...
++//========================================================================
++
++// Original value in Clayton's code (things go much faster at 90):
++#$matchpercent = 95;
++// CDUKES: Jun 18, 2008: Changed this to 86%, it seemed to work much better for me in finding duplicate rows
++$matchpercent = 86;
++
++// CDUKES: Aug 7, 2008: Added for command line passing of tables
++$Tables = array();
++if ($argc > 1) {
++   	foreach ($argv as $arg) {
++	   	if ($arg != $argv[0]) {
++		   	$tableArray = get_logtables($dbLink);
++		   	foreach($tableArray as $table) {
++			   	if ($table == $arg) {
++				   	array_push($Tables, $arg);
++			   	} else {
++				   	echo "Table $arg does not exist in this dojo!\n";
++			   	}
++		   	}
++	   	}
++   	}
++} else {
++   	array_push($Tables, DEFAULTLOGTABLE);
++}
++// die(print_r($Tables));
++foreach($Tables as $table) {
++   	echo "Processing Squeeze on $table\n";
++   	//------------------------------------------------------------------------
++   	// Grab all rows by sequence # (the primary key) for processing
++   	//------------------------------------------------------------------------
++   	$query = "SELECT * from " . $table . " ORDER BY seq ASC $limit";
++   	$result = perform_query($query, $dbLink);
++
++	//------------------------------------------------------------------------
++   	// Get row count
++   	//------------------------------------------------------------------------
++   	if(defined('COUNT_ROWS') && COUNT_ROWS == TRUE) {
++	   	$num_results_array = perform_query("SELECT FOUND_ROWS()", $dbLink);
++	   	$num_results_array = fetch_array($num_results_array);
++	   	$num_rows = $num_results_array[0];
++   	} else {
++	   	$num_rows = mysql_num_rows($result);
++   	}
++   	echo "$num_rows total rows to process\n";
++
++	//------------------------------------------------------------------------
++   	// Begin outer loop
++   	// Loop through each record and collect information in a multi-dimensional
++   	// associative array keyed by host.
++  	//------------------------------------------------------------------------
++   	$exact_matches = 0;
++   	$similar_matches = 0;
++   	$rowcnt = 1;
++   	error_reporting(E_ALL);
++   	$host_message_cache = array();
++   	$max = 8000; // Max messages to process at a single time
++   	while ($row = fetch_array($result)) {
++	   	if (count($host_message_cache, COUNT_RECURSIVE) < $max ) {
++		   	//print_r($row); exit();
++		   	$r_host = $row['host'];
++		   	$r_message = $row['msg'];
++		   	$r_seq = $row['seq'];
++		   	$r_entry_timestamp = $row['datetime'];
++		   	$r_fo = $row['fo'];
++		   	$r_lo = $row['lo'];
++
++			if (array_key_exists($r_host, $host_message_cache))
++		   	{
++			   	// Host already in cache.  Update or create message entry.
++
++				$message_found = false;
++			   	$messages = $host_message_cache[$r_host];
++
++				// First check for exact match (on key value).  Otherwise, do the
++			   	// similar_text() (expensive) check.
++
++				if (array_key_exists($r_message, $host_message_cache[$r_host]))
++			   	{
++				   	// Found match in existing message set.  Update stats:
++				   	// echo "Found match in existing message set.  Update stats...\n";
++				   	$host_message_cache[$r_host][$r_message]['child_seqs'][]
++					   	= $r_seq;
++				   	$host_message_cache[$r_host][$r_message]['last_message_time']
++					   	= $r_lo ? $r_lo : $r_entry_timestamp;
++				   	$message_found = true;
++				   	$exact_matches++;
++			   	}
++			   	else
++			   	{
++				   	$tc=0;
++				   	foreach ($messages as $message => $message_data)
++				   	{
++					   	// Note: similar_text should be changed to return the matchpercent,
++					   	// instead of returning value by side effect.
++					  	//   (The host . message concatenation is done for consistency
++					   	//    with Clayton's original algorithm).
++					  	similar_text("$r_host,$r_message", "$r_host,$message", $p);	
++						/*
++						   if ($r_host = "11.16.254.160") { 
++						   echo "DEBUG $p\n\t$r_host,$r_message\n\t$r_host,$message\n";
++						   }
++						   if ($tc > 120) {
++						   exit;
++						   }
++						 */
++					   	if ($p >= $matchpercent)
++					   	{
++						   	// Found match in existing message set.  Update stats:
++						   	// echo "MATCH: $r_host,$r_message", "$r_host,$message, $p\n ";
++						   	$host_message_cache[$r_host][$message]['child_seqs'][]
++							   	= $r_seq;
++						   	$host_message_cache[$r_host][$message]['last_message_time']
++							   	= $r_lo ? $r_lo : $r_entry_timestamp;
++
++							$message_found = true;
++						   	$similar_matches++;
++						   	// echo "$similar_matches matches\n";
++						   	break;
++					   	}
++					   	$tc++;
++				   	}
++			   	}
++			   	if (!$message_found)
++			   	{
++				   	// Found not match in existing message set.  Create new entry.
++				  	$message_info = array('parent_seq' => $r_seq,
++						   	'child_seqs' => array(),
++						   	'first_message_time' => $r_entry_timestamp,
++						   	'last_message_time' => $r_lo ? $r_lo : $r_entry_timestamp);
++				   	$host_message_cache[$r_host][$r_message] = $message_info;
++			   	}
++		   	}
++		   	else
++		   	{
++			   	// Host didn't exist in cache, so create an entry for it
++
++				$message_info = array('parent_seq' => $r_seq,
++					   	'child_seqs' => array(),
++					   	'first_message_time' => $r_entry_timestamp,
++					   	'last_message_time' => $r_lo ? $r_lo : $r_entry_timestamp);
++			   	$host_message_cache[$r_host][$r_message] = $message_info;
++
++			}
++
++			if (($rowcnt++ % 1000 == 0))
++		   	{
++			   	// print_r($host_message_cache);
++			   	// print " $rowcnt\n ";
++			   	echo "Row $rowcnt Memory used: ".number_format(memory_get_usage())." bytes\n";
++			   	// exit();
++		   	}
++
++		} 
++		else {
++		   	// print_r($host_message_cache);
++		   	break;
++	   	}
++   	}
++
++#print_r ($host_message_cache); exit;
++
++	// We now have all of the information in the $host_message_cache.  Loop over
++   	// each message for each host and modify the database accordingly by
++   	// updating the message parent row's stats and deleting child rows.
++
++	// We are doing a lot of database modification.  It should all be part of the same transaction.
++
++	print "\n\n";
++   	print "Debug: Log table analysis complete.\n";
++   	print "Debug: Exact log message matches: $exact_matches\n";
++   	print "Debug: Similar log message matches: $similar_matches\n";
++
++
++	print "Debug: Starting log table modifications...\n";
++   	$db_time_start = get_microtime();
++
++	begin_transaction($dbLink);
++   	foreach ($host_message_cache as $host => $messages)
++   	{
++	   	foreach ($messages as $message => $message_data)
++	   	{
++		   	if (!$message_data['child_seqs'])
++			   	continue; // Solitary message with no associations.
++
++
++			// Bugfix: http://code.google.com/p/php-syslog-ng/issues/detail?id=70
++		   	// $count = count($message_data['child_seqs']) + 1; // Children + parent
++		   	$parent_seq = $message_data['parent_seq'];
++		   	$query_count = "SELECT counter FROM " . $table . " WHERE seq = '$parent_seq'";
++		   	$result_count = perform_query($query_count, $dbLink);
++		   	$row_count = fetch_array($result_count);
++		   	$r_counter = $row_count['counter'];
++
++			if (($r_counter == '') || ($r_counter == 0))
++		   	{
++			   	$count = count($message_data['child_seqs']) + 1; // Children + parent
++		   	}
++		   	else
++		   	{
++			   	$count = count($message_data['child_seqs']) + $r_counter; // Children + parent
++		   	}
++		   	$fo = $message_data['first_message_time'];
++		   	$lo = $message_data['last_message_time'];
++		   	$query = "UPDATE " . $table . "  SET counter = $count, fo = '$fo', lo = '$lo' WHERE seq = '$parent_seq'";
++
++			// Update the parent record to reflect count and start, end times.
++		  	if (! perform_query($query, $dbLink)) // Assuming that your perform_query returns false on error
++		   	{
++			   	rollback($dbLink);
++			   	die("Error: Update failed.");
++		   	}
++
++			// Delete all the child records.
++
++			// Create a set of SQL IN lists (e.g. "('seq1', 'seq2',...).  You
++		   	// need a set because there can be limits of 255 IN list members.
++		  	// print "Splitting lists into array of 255\n";
++		   	$lists = array_chunk($message_data['child_seqs'], $max_sql_in_list_count);
++		   	foreach ($lists as $list)
++		   	{
++			   	$in_list = create_sql_in_list($list);
++			   	$query = "DELETE FROM " . $table . " WHERE seq IN $in_list";
++			   	// print "Processing in list\n";
++			   	if (! perform_query($query, $dbLink)) // Assuming that your perform_query returns false on error
++			   	{
++				   	rollback($dbLink);
++				   	die("Error: Delete failed.");
++			   	}
++		   	}
++	   	}
++   	}
++
++	commit($dbLink);
++}
++
++	$dbsecs = get_microtime() - $db_time_start;
++   	print "Debug: Log table modifications complete in $dbsecs seconds...\n";
++
++	//------------------------------------------------------------------------
++   	// Gather and spit out some stats
++   	//------------------------------------------------------------------------
++
++	$query = 'SELECT count(*) AS "count" from ' . $table ;
++   	$result = perform_query($query, $dbLink);
++   	$row = fetch_array($result);
++   	$num_rows_after = $row['count'];
++   	$savings = $num_rows - $num_rows_after;
++   	$savings_p = round( ($savings/$num_rows)*100, 0 );
++   	echo "\nStarting Row Count = $num_rows\n";
++   	echo "Ending Row Count = $num_rows_after\n";
++   	echo "Cleaned $savings records saving $savings_p percent\n";
++   	$time_end = get_microtime();
++   	$exetime = round($time_end - $time_start, 2);
++   	$mps = round($num_rows/$exetime, 2);
++   	echo "Squeeze finished in ".$exetime." seconds ($mps MPS)\n";
++//========================================================================
++// END
++//========================================================================
++
++///// Functions (should probably be put in include file common functions
++
++/**
++ * Create an SQL in list '(val1,val2,...,valn)' from an array.  If any
++ * elements are not numeric, treat all as characters.
++ * One may also use the $force_string arg to force a string type.
++ */
++function create_sql_in_list($vals, $force_string = false)
++{
++   	$is_str = array_filter($vals,
++		   	create_function('$val', 'return (! is_numeric($val));'));
++
++	$is_str = $is_str || $force_string;
++   	$res = '(';
++   	$sep = '';
++   	foreach ($vals as $val)
++   	{
++	   	$res .= $sep;
++	   	if ($is_str)
++		   	$res .= "'";
++	   	$res .= $val;
++	   	if ($is_str)
++		   	$res .= "'";
++	   	$sep = ',';
++   	}
++   	$res .= ')';
++   	return $res;
++}
++
++/**
++ * Database transaction functions.
++ *
++ *  
++ */
++
++function begin_transaction($dbLink)
++{
++   	mysql_query('begin');
++}
++
++function rollback($dbLink)
++{
++   	mysql_query('rollback');
++}
++
++function commit($dbLink)
++{
++   	mysql_query('commit');
++}
++?>
+diff -Nur -Nur php-syslog-ng/scripts/tests/generate-logs.sh php-syslog-ng.2.9.8a/scripts/tests/generate-logs.sh
+--- php-syslog-ng/scripts/tests/generate-logs.sh	2008-02-28 17:09:24.000000000 -0500
++++ php-syslog-ng.2.9.8a/scripts/tests/generate-logs.sh	2008-08-07 15:01:46.000000000 -0400
+@@ -4,4 +4,42 @@
+ # using TCP stream
+ # for one minute (60 seconds)
+ # on port 5000 (check /etc/syslog-ng.conf to make sure it's listening)
+-./loggen -r 5000 -S --interval 10 localhost 5000
++
++#######################################
++# Prompt for a value
++#######################################
++f_ANSWER()
++{
++   	printf "%s " "$1"
++   	if [ "$2" != "" ] ; then
++	   	printf "[%s] " "$2"
++   	fi 
++	if [ "${DEFAULT:-0}" -eq 0 ] ; then
++	   	read ANSWER
++   	else
++	   	printf "%s\n" "$2"
++   	fi
++   	if [ "$ANSWER" = "" ] ; then
++	   	ANSWER="$2"
++   	fi
++}
++
++f_ANSWER "Logs per day?" "10000000"
++LPD=$ANSWER
++MPS=`expr $LPD / 24 / 60 / 60`
++echo "Will run @ $MPS messages per second"
++f_ANSWER "Destination Host?" "log1"
++HOST=$ANSWER
++f_ANSWER "Port?" "5000"
++PORT=$ANSWER
++f_ANSWER "How Long? (seconds)" "86400"
++TIME=$ANSWER
++
++echo "Starting loggen"
++echo "MPS: $MPS"
++echo "TIME: $TIME"
++echo "HOST: $HOST"
++echo "PORT: $PORT"
++./loggen -r $MPS -S --interval $TIME $HOST $PORT
++echo "Run completed!"
++exit
+diff -Nur -Nur php-syslog-ng/scripts/users.sql php-syslog-ng.2.9.8a/scripts/users.sql
+--- php-syslog-ng/scripts/users.sql	1969-12-31 19:00:00.000000000 -0500
++++ php-syslog-ng.2.9.8a/scripts/users.sql	2007-09-14 11:01:51.000000000 -0400
+@@ -0,0 +1,50 @@
++-- MySQL dump 10.10
++--
++-- Host: localhost    Database: syslog
++-- ------------------------------------------------------
++-- Server version	5.0.24a-Debian_9ubuntu2-log
++
++/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
++/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
++/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
++/*!40101 SET NAMES utf8 */;
++/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
++/*!40103 SET TIME_ZONE='+00:00' */;
++/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
++/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
++/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
++/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
++
++--
++-- Table structure for table `users`
++--
++
++DROP TABLE IF EXISTS `users`;
++CREATE TABLE `users` (
++  `username` varchar(32) NOT NULL default '',
++  `pwhash` char(40) default NULL,
++  `sessionid` char(32) default NULL,
++  `exptime` datetime default NULL,
++  PRIMARY KEY  (`username`)
++) ENGINE=MyISAM DEFAULT CHARSET=latin1;
++
++--
++-- Dumping data for table `users`
++--
++
++
++/*!40000 ALTER TABLE `users` DISABLE KEYS */;
++LOCK TABLES `users` WRITE;
++INSERT INTO `users` VALUES ('admin','cbcb57332ea0290af7ca6b61df97e644','b7f3597d98f4782b3beee88a228b91f3','0000-00-00 00:00:00'),('demo','fe01ce2a7fbac8fafaed7c982a04e229','bcdc7030ed10d4e46f91f11fcf921b31','2007-09-14 11:56:12');
++UNLOCK TABLES;
++/*!40000 ALTER TABLE `users` ENABLE KEYS */;
++/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
++
++/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
++/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
++/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
++/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
++/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
++/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
++/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
++

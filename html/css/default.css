@@ -1,0 +1,299 @@
+body {
+  font-family: Verdana, Arial, Helvetica, Swiss, Futura, sans-serif;
+  font-size: 11px;
+  background: #FFFFFF;
+  padding: 0px;
+  border: 0px;
+  margin: 0px;
+  color: #000000;
+  font-size: 11px;
+}
+
+table {
+  width: 100%;
+  color: #000000;
+  font-family: Verdana, Arial, Helvetica, Swiss, Futura, sans-serif;
+  font-size: 11px;
+}
+
+a {
+  font-weight: bold;
+  color: #000000;
+  text-decoration: none;
+}
+
+a:hover {
+  color: #66AA00;
+}
+
+hr {
+  width: 99%;
+}
+
+table.pagecontent {
+  width: 98%;
+  padding: 0px;
+  border-style: none;
+  border-width: 0px;
+  margin: 0px;
+}
+
+
+a.vertmenu {
+  padding-left: 1em;
+  padding-right: 1em;
+}
+
+a.vertmenu:hover {
+  color: #FFFFFF;
+}
+
+/*--------*/
+/* Header */
+/*--------*/
+table.header {
+  padding: 0px;
+  border-style: none;
+  border-width: 0px;
+  margin: 0px;
+  background-color: #484848;
+  color: #ffffff;
+}
+
+table.headerbottom {
+  background-color: #98A898;
+  padding-left: 1em;
+  padding-right: 1em;
+}
+
+h2.logo {
+  font-size: 150%;
+  margin-top: 0.4em;
+  margin-bottom: 0.2em;
+  color: #ffffff;
+}
+
+.headerright {
+  text-align: right;
+}
+
+
+/*------------*/
+/* Sub-header */
+/*------------*/
+h2.subheader {
+  font-size: 150%;
+  margin-bottom: 0.2em;
+  text-align: center;
+}
+
+h3.title {
+  font-size: 125%;
+  margin-top: 2em;
+  margin-bottom: 0.1em;
+}
+
+h4.title {
+  font-size: 100%;
+  margin-top: 0.7em;
+  margin-bottom: 0.1em;
+}
+
+.code {
+  font-family: monospace;
+}
+
+
+.sevlegend {
+  text-align: right;
+  padding: 0px;
+  border: 0px;
+  margin: 0px;
+  float: right;
+}
+
+.sev0 {
+  text-align: center;
+  padding-left: 1em;
+  padding-right: 1em;
+  background-color: #ffffff;
+}
+
+.sev1 {
+  text-align: center;
+  padding-left: 1em;
+  padding-right: 1em;
+  background-color: #dfffdf;
+}
+
+.sev2 {
+  text-align: center;
+  padding-left: 1em;
+  padding-right: 1em;
+  background-color: #a0ffa0;
+}
+
+.sev3 {
+  text-align: center;
+  padding-left: 1em;
+  padding-right: 1em;
+  background-color: #ffff00;
+}
+
+.sev4 {
+  text-align: center;
+  padding-left: 1em;
+  padding-right: 1em;
+  background-color: #ff8f00;
+}
+
+.sev5 {
+  text-align: center;
+  padding-left: 1em;
+  padding-right: 1em;
+  background-color: #ffa0a0;
+}
+
+.sev6 {
+  text-align: center;
+  padding-left: 1em;
+  padding-right: 1em;
+  background-color: #ff0000;
+}
+
+.sev7 {
+  text-align: center;
+  padding-left: 1em;
+  padding-right: 1em;
+  background-color: #ff00ff;
+}
+
+
+
+.resultsheader {
+  background-color: #484848;
+  color: #ffffff;
+  text-align: left;
+  font-weight: bold;
+}
+
+.lighter {
+  background-color: #E0E0E0;
+  font-family: Verdana, Arial, Helvetica, Swiss, Futura, sans-serif;
+}
+
+.darker {
+  background-color: #C0C0C0;
+  font-family: Verdana, Arial, Helvetica, Swiss, Futura, sans-serif;
+}
+
+
+
+table.searchform {
+  width: 100%;
+  border-style: none;
+  border-width: 0px;
+  text-align: center;
+  padding: 0px;
+  margin: 0px;
+}
+
+table.formentry {
+  width: auto;
+  align: center;
+}
+
+
+table.msgentry {
+	width: auto;
+	margin-left: auto;
+	margin-right: auto;
+}
+
+table.query {
+  border-style: none;
+  border-width: 0px;
+  padding: 0px;
+  margin: 0px;
+  background-color: #040480;
+  color: #ffffff;
+}
+
+.longtext {
+  font-size: 13px;
+}
+
+ .textCenter {
+	 border: 0px solid white;
+	 color: white;
+	 position: relative;
+	 width: 100%;
+	 text-align: center;
+	 font-weight: bold;
+ }
+ .bg {
+	 border: 0px solid white;
+	 color: white;
+	 background: #3A6EA5;
+	 position: relative;
+	 width: 100%;
+	 text-align: left;
+	 font-weight: bold;
+ }
+ .comic10 {
+	 font-family:'Comic Sans MS'; 
+	 font-size:10px;
+ } 
+ .olcg {
+	 background-color:#4466ff; 
+	 text-align:center;
+ }
+ td.tooltip 
+ {	
+	 background-color: #FFFFCE
+	 border:#000000
+	 font-family: Arial, Helvetica, sans-serif
+	 font-size: 11px
+	 color: #000000
+ }
+
+ .tagline {
+	 border: 0px solid white;
+	 background-color: #ECECEC;
+	 color: blue;
+	 position: relative;
+	 width: 25%;
+	 text-align: center;
+ }
+ input.datePickerDate {
+	 color: green;
+	 font-weight: bold;
+ }
+ select.datePickerMonth {
+	 font-size: 10px;
+	 height: 18px;
+	 background-color:silver;
+ }
+ input.datePickerYear {
+	 font-size: 10px;
+	 height: 18px;
+	 width: 35px;
+	 background-color:silver;
+ }
+ .datePickerTable {
+ }
+ .datePickerDayHeader {
+	 font-size: 10px;
+	 font-family: arial;
+ }
+ .datePickerDay {
+	 font-size: 9px;
+	 font-family: arial;
+ }
+
+/*--------*/
+/* Footer */
+/*--------*/
+.rightfooter {
+  text-align: right;
+}

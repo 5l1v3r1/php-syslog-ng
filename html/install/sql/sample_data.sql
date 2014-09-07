@@ -1,0 +1,3 @@
+INSERT INTO `logs` VALUES ('srv-www-001','daemon','warning','alert','Tag','2006-06-15 22:25:32','Test Script','%AAA-3-IPILLEGALMSG: Fan 1 had a rotation error reported.',1),('as-3550-2','kern','info','alert','Tag','2006-06-15 22:25:34','Test Script','Duplicate address 10.10.2.2 on Vlan20',2),('as-3550-2','mail','warning','crit','Tag','2006-06-15 22:25:36','Test Script','Line protocol on Interface FastEthernet0/7, changed state to up',3);
+INSERT INTO `search_cache` VALUES ('logs','HOST','as-3550-2','2006-06-15 18:25:54'),('logs','HOST','srv-www-001','2006-06-15 18:25:54'),('logs','FACILITY','daemon','2006-06-15 18:25:54'),('logs','FACILITY','kern','2006-06-15 18:25:54'),('logs','FACILITY','mail','2006-06-15 18:25:54');
+

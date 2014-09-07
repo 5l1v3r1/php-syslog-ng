@@ -1,0 +1,1715 @@
+diff -Nur -Nur html/CHANGELOG html.2.9.7/CHANGELOG
+--- html/CHANGELOG	2008-02-28 16:50:06.000000000 -0500
++++ html.2.9.7/CHANGELOG	2008-03-20 21:23:21.000000000 -0400
+@@ -1,4 +1,48 @@
+ CHANGELOG
++2.9.7 
++* Updates/Enhancements
++!!! IMPLEMENTED SqueezeDB.php file in scripts/ !!!
++- Be sure you add this to your CRON!
++NOTE: If you have a very large database (more than 10k rows in 5 minutes), it WILL NOT scale. 
++Next release I hope to have a more scalable solution in place.
++More info on this is at http://code.google.com/p/php-syslog-ng/issues/detail?id=47
++  Cron Entry for SqueezeDB:
++ */5 * * * * php /www/php-syslog-ng/scripts/SqueezeDB-v2.0.php >> /var/log/php-syslog-ng/squeezedb.log 
++
++   NOTE: Versions of php-syslog-ng 2.9.5d and below will need to alter the database to use this script
++   ALTER TABLE logs ADD counter INT NOT NULL DEFAULT 1;
++   ALTER TABLE logs ADD fo datetime default NULL;
++   ALTER TABLE logs ADD lo datetime default NULL;
++
++- Added LDAP Auth section for Microsoft AD
++- Added 'DEMO' to config.php to change login page notification of demo site
++- Added FO, LO, and Count fields for squeezdb implementation
++- Added config.php variable for calculating hostcount on search page
++- Fixed a bug in login.php that wasn't notifying you of a failed password auth (it just put you back to the login screen)
++- Fixed bug for missing TAIL_REFRESH_SECONDS from config.php on new installation (http://code.google.com/p/php-syslog-ng/issues/detail?id=51)
++- Added a small "callhome" feature includes/callhome.php to help me get an idea of demographics - enable or disable in config.php (CALLHOME) setting.
++- Fixed FO, LO and COUNT Sort fields (added logic for sorting) in regularresult.php
++- Split Program and MSG into two columns in both regularresult and tail
++- Fixed issue 20: "Parse error: syntax error, unexpected $end in" (http://code.google.com/p/php-syslog-ng/issues/detail?id=20)
++- Fixed issue 27: "Tab stops on login screen" (http://code.google.com/p/php-syslog-ng/issues/detail?id=27)
++- Fixed issue 28: "Back to search does not remember search criteria" (http://code.google.com/p/php-syslog-ng/issues/detail?id=28)
++- Implemented issue 31: Regex Enhancements (http://code.google.com/p/php-syslog-ng/issues/detail?id=31)
++- Fixed issue 33: "custom title for tail queries" (http://code.google.com/p/php-syslog-ng/issues/detail?id=33)
++- Fixed issue 35: "save post variables through login procedure" (http://code.google.com/p/php-syslog-ng/issues/detail?id=35)
++- Fixed issue 49: Path settings in some files (http://code.google.com/p/php-syslog-ng/issues/detail?id=49)
++- Fixed issue 51: "Tail reloads page many times in a second" (http://code.google.com/p/php-syslog-ng/issues/detail?id=51)
++- Fixed issue 52: "Parse error: syntax error, unexpected $end in" (http://code.google.com/p/php-syslog-ng/issues/detail?id=52)
++- Fixed issue 53: "Parse error: syntax error, unexpected $end in" (http://code.google.com/p/php-syslog-ng/issues/detail?id=53)
++- Fixed issue 54: "Parse error: syntax error, unexpected $end in" (http://code.google.com/p/php-syslog-ng/issues/detail?id=54)
++- Fixed issue 55: "Input validation error for Program" (http://code.google.com/p/php-syslog-ng/issues/detail?id=55)
++- Fixed issue 56: "Search Option SYSLOG PRIORITY - HTML failure" (http://code.google.com/p/php-syslog-ng/issues/detail?id=56)
++- Fixed issue 57: Error check for "tail" operation on anything other than the default log table (http://code.google.com/p/php-syslog-ng/issues/detail?id=57)
++TODO:
++- Add WHERE clause on front page for FO, LO and Count
++- Re-write SqueezeDB in PERL for faster processing and scalability.
++- Need testers for SqueezeDB to verify that we aren't generating false-positives.
++
++
+ 2.9.6
+ * Enhancements
+ - Changed "DEFINE("TTF_DIR","/usr/share/fonts/truetype/msttcorefonts/");" in includes/jpgraph/jpg-config.inc
+diff -Nur -Nur html/config/config.php html.2.9.7/config/config.php
+--- html/config/config.php	2008-02-28 17:32:37.000000000 -0500
++++ html.2.9.7/config/config.php	2008-03-20 21:27:14.000000000 -0400
+@@ -1 +1,129 @@
++<?php
++define('PAGETITLE', 'Php-Syslog-NG' );
++define('VERSION', '2.9.6a(beta)');
++define('COUNT_ROWS', TRUE);
++define('MERGELOGTABLE', 'all_logs');
++define('DEFAULTLOGTABLE', 'logs');
++define('USETABLE', DEFAULTLOGTABLE); // This tells the main page to calculate hostcount based on "all_logs" or "logs"
++define('LOGROTATERETENTION', 30);
++define('DBUSER', 'sysloguser');
++define('DBUSERPW', 'sysloguser');
++define('DBADMIN', 'syslogadmin');
++define('DBADMINPW', 'syslogadmin');
++define('DBNAME', 'syslog');
++define('DBHOST', 'localhost');
++define('DBPORT', '3306');
++define('REQUIRE_AUTH', TRUE);
++define('AUTHTABLENAME', 'users');
++define('RENEW_SESSION_ON_EACH_PAGE', TRUE);
++define('SESSION_EXP_TIME', '3600');
++define('TAIL_REFRESH_SECONDS', '25');
++define('USE_ACL', TRUE);
++define('USER_ACCESS_TABLE', 'user_access');
++define('ACTION_TABLE', 'actions');
++define('USE_CACHE', TRUE);
++define('CACHETABLENAME', 'search_cache');
++define('SITEADMIN', 'admin');
++define('SITENAME', 'The Home of Php-Syslog-NG');
++define('ADMINEMAIL', 'cdukes@cdukes.com');
++define('CEMDB', 'ON');
++define('CISCO_ERROR_TABLE', 'cemdb');
++define('DEBUG', '0');
++define('SITEURL', '/');
++$regExpArray = array(
++			"username"=>"(^\w{4,}\$)",
++			"password"=>"(^.{4,}\$)",
++			"pageId"=>"(^\w+$)",
++			"sessionId"=>"(^\w{32}\$)",
++			"date"=>"/^yesterday$|^today$|^now$|^(\d){4}-([01]*\d)-([0123]*\d)$/i",
++			"time"=>"/^now$|^([012]*\d):([012345]*\d):([012345]*\d)$/i",
++			"limit"=>"(^\d+$)",
++			"topx"=>"(^\d+$)",
++			// BPK added program to orderby filter
++			"orderby"=>"/^seq$|^host$|^program$|^facility$|^priority$|^datetime$|^msg$|^fo$|^lo$|^counter$/i",
++			"order"=>"/^asc$|^desc$/i",
++			"offset"=>"(^\d+$)",
++			"collapse"=>"/^1$/",
++			"table"=>"(^\w+$)",
++			"excludeX"=>"(^[01]$)",
++			/* BEGIN: changes by BPK to allow for regexp matching, lists of hosts, and programs
++			"host"=>"(^[\w-.]+$)",
++			*/
++			"regexpX"=>"(^[01]$)",
++			"host"=>"(^([\w_.%-]+[,;]\s*)*[\w_.%-]+$)",
++			"program"=>"(^([\w/_.%-]+[,;]\s*)*[\w/_.%-]+$)",
++			"hostRegExp"=>"(^\S+$)",
++			"programRegExp"=>"(^\S+$)",
++			/* END: changes by BPK to allow for regexp matching, lists of hosts, and programs */
++			"facility"=>"(^\w+$)",
++			"priority"=>"/^debug$|^info$|^notice$|^warning$|^err$|^crit$|^alert$|^emerg$/i",
++			);
++//------------------------------------------------------------------------
++// CDUKES - BEGIN jpgraph Addon
++//------------------------------------------------------------------------
+ 
++// Enable Graphing
++define('JPG_GRAPHS', 'ON');
++// Make sure this directory exists and has write permission
++define('IMG_CACHE_DIR', 'jpcache/');
++
++// Enable Daily Graph in dropdown on main page
++define('JPG_DAILY', 'ON');
++// Enable Weekly Graph in dropdown on main page
++define('JPG_WEEKLY', 'ON');
++// Enable Monthly Graph in dropdown on main page
++define('JPG_MONTHLY', 'ON');
++// Enable Overall Statistics Graph on main page (This will slow down main page rendering)
++define('JPG_MAIN', 'OFF'); // Not implemented yet
++
++
++//------------------------------------------------------------------------
++// CDUKES - END jpgraph Addon
++//------------------------------------------------------------------------
++//------------------------------------------------------------------------
++// CDUKES - Begin LDAP Addon
++//------------------------------------------------------------------------
++define('LOGIN_URL', SITEURL . "login.php");
++define('LOGOUT_URL', SITEURL . "logout.php");
++define('INDEX_URL', SITEURL . "index.php");
++define('LDAP_ENABLE', "NO");
++define('LDAP_SRV', "ldap.company.com");
++define('LDAP_BASE_DN', "ou=active, ou=employees, ou=people, o=company.com");
++// variable to search for user (container name) - in my case, this is "uid", but normally it is "cn"
++define('LDAP_CN', "uid");
++// if using MS Active Directory, put it to "sAMAccountName"
++// define('LDAP_CN', "sAMAccountName");
++// Set to Yes if using MS Active Directory for Authentication
++define('LDAP_MSAD', "NO");
++// Required when if LDAP_MSAD set to YES and using MS Active Directory, ex. mydomain.com
++define('LDAP_DOMAIN', "mydomain.com");
++
++
++// privilege levels for editing records 
++// (not implemented yet - this will be used to define RW and RO groups from LDAP)
++// use privilege level authentication for record editing?
++define  ('LDAP_USEPRIV', 'OFF');
++// if USEPRIV is enabled, what LDAP group name is the "privileged" group?
++define  ('LDAP_RW_GROUP', 'admin');
++define  ('LDAP_RO_GROUP', 'users');
++//------------------------------------------------------------------------
++// CDUKES - END LDAP Addon
++//------------------------------------------------------------------------
++
++//------------------------------------------------------------------------
++// cdukes - I added this just in case someone felt generous
++// If you don't want it on the menu bar, just disable it here :-)
++//------------------------------------------------------------------------
++define  ('PAYPAL_ENABLE', 'YES');
++
++//------------------------------------------------------------------------
++// CDUKES - Just a simple addition for my demo site at http://php-syslog-ng.gdd.net
++//------------------------------------------------------------------------
++define  ('DEMO', TRUE);
++
++//------------------------------------------------------------------------
++// CDUKES - Call home feature so I can see how many people are using this
++// Feel free to disable this if you're overly paranoid (or don't have net access)
++//------------------------------------------------------------------------
++define  ('CALLHOME', TRUE);
++?>
+diff -Nur -Nur html/includes/callhome.php html.2.9.7/includes/callhome.php
+--- html/includes/callhome.php	1969-12-31 19:00:00.000000000 -0500
++++ html.2.9.7/includes/callhome.php	2008-03-02 19:01:07.000000000 -0500
+@@ -0,0 +1,46 @@
++<?php
++/*
++ * callhome.php
++ *
++ * Developed by Clayton Dukes <cdukes@cdukes.com>
++ * Copyright (c) 2008 http://www.gdd.net
++ * Licensed under terms of GNU General Public License.
++ * All rights reserved.
++ *
++ * Changelog:
++ * 2008-03-02 - created
++ * A simple script to help me get an idea of how many folks are using this tool
++ * feel free to disable it in config.php if you like :)
++ *
++ */
++
++/* $Platon$ */
++
++$filename = ".callhome";
++if (!file_exists($filename)) {
++   	if(defined('CALLHOME') && CALLHOME == TRUE) {
++	   	// This is a best-effort attempt to send me an email, it kinda depends on
++	   	// whether or not you have the ability to do so from your server :-)
++	   	$message = "User Call home data for Php-Syslog-NG\n";
++	   	$message 		 = "HOST: " .$_SERVER["HTTP_HOST"] ."\n";
++	   	$message 		.= "U_AGENT: " .$_SERVER["HTTP_USER_AGENT"] ."\n";
++	   	$message 		.= "S_SIG: " .$_SERVER["SERVER_SIGNATURE"] ."\n";
++	   	$message		.= "S_SFT: " .$_SERVER["SERVER_SOFTWARE"] ."\n";
++	   	$message	 	.= "S_NAME: " .$_SERVER["SERVER_NAME"] ."\n";
++	   	$message	 	.= "S_ADDR: " .$_SERVER["SERVER_ADDR"] ."\n";
++	   	$to				 = 'cdukes@cdukes.com';
++	   	$subject	 	 = 'Php-syslog-ng Callhome';
++	   	$from			 = $_SERVER["SERVER_ADMIN"] . "@" . $_SERVER["HTTP_HOST"];
++	   	$headers		 = "From: $from" . "\r\n" .
++		  	"Reply-To: $from" . "\r\n" .
++		  	'X-Mailer: PHP/' . phpversion();
++	   	mail($to, $subject, $message, $headers);
++
++		// Now write a "tickle" file so we don't call home more than once
++	   	$Content = "Tickle file to suppress subsequent calls home, it's safe to delete this file, but you may also want to set CALLHOME to FALSE in your config.php\r\n"; 
++		$handle = fopen($filename, 'x+'); 
++		fwrite($handle, $Content);
++	   	fclose($handle); 
++	}
++}
++?>
+diff -Nur -Nur html/includes/common_funcs.php html.2.9.7/includes/common_funcs.php
+--- html/includes/common_funcs.php	2008-02-28 14:01:46.000000000 -0500
++++ html.2.9.7/includes/common_funcs.php	2008-03-20 21:25:43.000000000 -0400
+@@ -478,21 +478,21 @@
+ 
+      case 'META': 
+ 
+-       ?><meta http-equiv="refresh" content="0;url=<?php echo $url?>" /><?
++       ?><meta http-equiv="refresh" content="0;url=<?php echo $url?>" /><?php
+        exit;
+ 
+      case 'JS': 
+ 
+        ?><script type="text/javascript">
+        window.location.href='<?php echo $url?>';
+-       </script><?
++       </script><?php
+        exit;
+ 
+      default: /* -- Java Script */
+ 
+        ?><script type="text/javascript">
+        window.location.href='<?php echo $url?>';
+-       </script><?
++       </script><?php
+   }
+   exit;
+ }
+@@ -608,7 +608,16 @@
+ # cdukes - Added below for 2.9.4
+ function secure () {
+    	if (!($_SESSION["member_id"]) || ($_SESSION["member_id"] == "")) {
+-	   	Header("Location:" . LOGIN_URL);
++	   	// Cdukes: 3/20/08: Carry post variables through login
++	   	// Ref: http://code.google.com/p/php-syslog-ng/issues/detail?id=35
++	   	// Header("Location:" . LOGIN_URL);
++		$destination = LOGIN_URL;
++		// Remember search query across login
++			if (!empty($_SERVER['QUERY_STRING']))
++			{
++				$destination .= '?' . $_SERVER['QUERY_STRING'];
++				}
++				Header("Location:" . $destination);
+ 	   	exit();
+ 	} else {
+ 		return $_SESSION["member_id"];
+@@ -637,16 +646,34 @@
+ 		   	$error .= "Could not connect to LDAP server:" . LDAP_SRV;
+ 	   	}
+ 
+-		if (!($bind = @ldap_bind($connect, "$dn" . LDAP_BASE_DN, $password))) {
+-		   	$error .= " Unable to bind to LDAP Server: <b>" . LDAP_SRV . "</b><br> <li>DN: $dn<br> <li>BaseDN: " . LDAP_BASE_DN . "<br>";
+-	   	}
++		switch (LDAP_MSAD) {
++		
++			case "YES":
++				
++				ldap_set_option($connect, LDAP_OPT_PROTOCOL_VERSION,3);
++	                        ldap_set_option($connect, LDAP_OPT_REFERRALS,0);
++
++				if (!($bind = @ldap_bind($connect, "$username@" . LDAP_DOMAIN, $password))) {
++		                        $error .= " Unable to bind to LDAP Server: <b>" . LDAP_SRV . "</b><br> <li>DN: $dn<br> <li>BaseDN: " . LDAP_BASE_DN . "<br>";
++                		}
++
++				break;
++
++			default:
++		
++				if (!($bind = @ldap_bind($connect, "$dn" . LDAP_BASE_DN, $password))) {
++				   	$error .= " Unable to bind to LDAP Server: <b>" . LDAP_SRV . "</b><br> <li>DN: $dn<br> <li>BaseDN: " . LDAP_BASE_DN . "<br>";
++	   			}
++				
++		}
++
+ 	   	if (!($sr = @ldap_search($connect, LDAP_BASE_DN, $filter))) { #search for user
+ 		   	$error .= " Unable to search: <b>" . LDAP_SRV . "</b><br> <li>DN: $dn<br> <li>BaseDN: " . LDAP_BASE_DN . "<br>";
+ 	   	}
++
+ 	   	$info = @ldap_get_entries($connect, $sr);
+ 	   	// print  "Number of entries returned is " .ldap_count_entries($connect, $sr)."<p>";
+-	   	$fullname=$info[0]["cn"][0];
+-	   	$fqdn=$info[0]["dn"];
++
+ 	   	if (LDAP_USEPRIV == "ON") {
+ 		   	if (in_array(LDAP_RW_GROUP, $info[0]["groupmembership"])) {
+ 			   	$_SESSION["userpriv"] = "rw";
+@@ -657,18 +684,28 @@
+ 			   	// echo "User privileges are " . $_SESSION["userpriv"] . "<br>";
+ 		   	} 
+ 		}
+-	   	$_SESSION["username"] = $username;
+-	   	$_SESSION["groups"] = $info[0]["groupmembership"];
+-	   	$_SESSION["token"] = $password;
+-	   	$_SESSION["fullname"] = $fullname;
+-	   	$_SESSION["fqdn"] = $fqdn;
+-	   	$flname = explode(" ", $fullname);
+-	   	$_SESSION["firstname"] = $flname[0];
+-	   	$_SESSION["lastname"] = $flname[1];
+-	   	$_SESSION["pageId"] = "searchform" ;
+-	   	// die(phpinfo());
+-	   	 // die(print_r($info[0]));
+-	   	// die(print_r($_SESSION));
++
++
++                if ( trim($error) != "" ) {
++                         return $error;
++                } else {
++
++			$fullname=$info[0]["cn"][0];
++        	        $fqdn=$info[0]["dn"];
++
++	   		$_SESSION["username"] = $username;
++		   	$_SESSION["groups"] = $info[0]["groupmembership"];
++		   	$_SESSION["token"] = $password;
++		   	$_SESSION["fullname"] = $fullname;
++		   	$_SESSION["fqdn"] = $fqdn;
++	   		$flname = explode(" ", $fullname);
++		   	$_SESSION["firstname"] = $flname[0];
++		   	$_SESSION["lastname"] = $flname[1];
++	   		$_SESSION["pageId"] = "searchform" ;
++		   	// die(phpinfo());
++		   	// die(print_r($info[0]));
++	   		// die(print_r($_SESSION));
++		}
+ 
+ 		/* from here, do your sql query to query the database to search for existing record with correct username and password */
+    	} else {
+@@ -689,10 +726,12 @@
+ 					exptime='".$expTimeDB."' WHERE username='".$username."'";
+ 			   	$result = perform_query($query, $dbLink);
+ 		   	} else {
+-			   	$error .= " Invaid password for user $username";
++			   	$error .= " Invalid password for user $username";
++			   	$_SESSION["error"] = "$error";
+ 		   	}
+ 	   	} else {
+ 		   	$error .= " Missing POST variables";
++			   	$_SESSION["error"] = "$error";
+ 	   	}
+    	}
+    	if (trim($error)!="") {
+diff -Nur -Nur html/includes/graphit.php html.2.9.7/includes/graphit.php
+--- html/includes/graphit.php	2008-02-28 16:46:54.000000000 -0500
++++ html.2.9.7/includes/graphit.php	2008-03-20 19:23:46.000000000 -0400
+@@ -451,7 +451,7 @@
+ 	?>
+ 		<table align="center">
+ 		<tr><td>
+-		<?
++		<?php
+ 		// Set up Graph variables
+ 		$slice = 0;
+ 	$type = "pie3d";
+@@ -506,7 +506,7 @@
+ 	/* cdukes - 2-28-08: Added a test to notify the user if they selected more TopX than what was available in the database
+     Example: Selecting Top 100 when only 50 hosts are in the DB
+ 	 */
+-   	$numhosts = (count($host) - 1); // minus 1 for the sql row
++   	$numhosts = (count($host)); 
+    	// die("Hostcount:$numhosts \nTopx: $topx\n");
+ 	if ($numhosts >= $topx) {
+ 	$graph->title->Set("Top $topx Hosts of " . $totalrows . " total messages");
+diff -Nur -Nur html/includes/html_header.php html.2.9.7/includes/html_header.php
+--- html/includes/html_header.php	2008-02-06 15:51:31.000000000 -0500
++++ html.2.9.7/includes/html_header.php	2008-03-20 20:50:15.000000000 -0400
+@@ -8,7 +8,12 @@
+ ?>
+ <html>
+ <head>
+-<?php echo "<title>".PAGETITLE." ".VERSION.": ".$addTitle."</title>"; ?>
++<?php 
++// custom title for tail queries 
++// Ref: http://code.google.com/p/php-syslog-ng/issues/detail?id=33
++// echo "<title>".PAGETITLE." ".VERSION.": ".$addTitle."</title>"; 
++echo "<title>".$addTitle.": ".PAGETITLE." ".VERSION."</title>"; 
++?>
+ <link rel=stylesheet type=text/css href='css/default.css'>
+ <link rel="icon" href="favicon.ico" type="image/x-icon" />
+ <link rel="shortcut icon" href="favicon.ico" type="image/x-icon" />
+@@ -96,7 +101,7 @@
+ <!-- End Overlib -->
+ 
+ <!-- Begin Google Code -->
+-<?
++<?php
+ if (is_file("includes/google-analytics.html")) {
+ include "includes/google-analytics.html";
+ }
+diff -Nur -Nur html/includes/pageload.php html.2.9.7/includes/pageload.php
+--- html/includes/pageload.php	2007-09-10 20:54:28.000000000 -0400
++++ html.2.9.7/includes/pageload.php	2008-03-20 19:23:28.000000000 -0400
+@@ -1,4 +1,4 @@
+-<?
++<?php
+ include_once '../config/config.php';
+ include_once ("common_funcs.php");
+ 
+diff -Nur -Nur html/includes/regularresult.php html.2.9.7/includes/regularresult.php
+--- html/includes/regularresult.php	2008-02-27 20:24:10.000000000 -0500
++++ html.2.9.7/includes/regularresult.php	2008-03-20 12:46:56.000000000 -0400
+@@ -593,10 +593,18 @@
+ 		.(($orderby=='host' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">HOST</a></td>';
+ 	echo '<td><a href="'.$_SERVER['PHP_SELF'].'?orderby=facility&order='
+ 		.(($orderby=='facility' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">FACILITY</a></td>';
++	echo '<td><a href="'.$_SERVER['PHP_SELF'].'?orderby=fo&order='
++		.(($orderby=='fo' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">FO</a></td>';
++	echo '<td><a href="'.$_SERVER['PHP_SELF'].'?orderby=lo&order='
++		.(($orderby=='lo' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">LO</a></td>';
++	echo '<td><a href="'.$_SERVER['PHP_SELF'].'?orderby=counter&order='
++		.(($orderby=='counter' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">COUNT</a></td>';
+ 	echo '<td><a href="'.$_SERVER['PHP_SELF'].'?orderby=datetime&order='
+ 		.(($orderby=='datetime' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">DATE TIME</a></td>';
+ 	echo '<td><a href="'.$_SERVER['PHP_SELF'].'?orderby=program&order='
+-		.(($orderby=='program' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">PROGRAM</a> MESSAGE</td>';
++		.(($orderby=='program' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">PROGRAM</a></td>';
++	echo '<td><a href="'.$_SERVER['PHP_SELF'].'?orderby=msg&order='
++		.(($orderby=='program' && $order=='DESC') ? 'ASC' : 'DESC').'&'.$orderParamsGET.'">MESSAGE</a></td>';
+ ?>
+ <!-- END: Switched by BPK to allow for sorting via links -->
+ </tr>
+@@ -683,6 +691,25 @@
+ 		}
+ 		echo "\"><a href=\"".$_SERVER['PHP_SELF']."?excludeFacility=0&facility[]=".$row['facility']."&".$facilityParamsGET."\">";
+ 		echo $row['facility']."</a></td>\n";
++
++ 		// echo "<td>".$row['fo']."</td>";
++		$pieces = explode(' ', $row['fo']);
++		echo '<td>';
++		if ($pieces[0]!=$today) {
++			echo $pieces[0]."&nbsp;";
++		}
++		echo $pieces[1];
++		echo "</td>\n";
++ 		// echo "<td>".$row['fo']."</td>";
++		$pieces = explode(' ', $row['lo']);
++		echo '<td>';
++		if ($pieces[0]!=$today) {
++			echo $pieces[0]."&nbsp;";
++		}
++		echo $pieces[1];
++		echo "</td>\n";
++		// Counter row follows
++ 		echo "<td>".$row['counter']."</td>";
+ 		/* END: Switched by BPK to allow filtering based on facility */
+  
+ 		
+@@ -696,6 +723,15 @@
+ 		}
+ 		echo $pieces[1];
+ 		echo "</td>\n";
++		echo '<td>';
++	   	$program = htmlspecialchars($row['program']);
++			if (!empty($program)) {
++				$pattern = '/^'.addcslashes($program, '.()[]/\\').'/';
++				$replacement = '<a href="'.$_SERVER['PHP_SELF'].'?excludeProgram=0&program[]='.$program.'&'.$programParamsGET.'">'.$program.'</a>';
++				$program = preg_replace($pattern, $replacement, $program);
++			}
++		echo $program;
++		echo "</td>\n";
+ 		/* END: Added by BPK to hide the date if it's the same as today */
+ 
+ 		/* BEGIN: Switched by BPK to show count along with extras like
+@@ -751,7 +787,16 @@
+ 			/* END: CEMDB Mod */
+ 		/* CONTINUE: Switched by BPK ...
+ 		}
+-		*/ // BPK - this is where the revised version begins
++		 */
++	   	// Grab Mnemonic name and Message and leave out the stuff at the front
++	   	$row['msg'] = preg_replace('/.*(%.*?:.*)/', '$1', $row['msg']);
++	   	// Original message:
++	   	// 3852752: DRP/0/0/CPU0:Feb 4 20:12:36.098 EST5: SSHD_[65697]: %SECURITY-SSHD-3-ERR_GENERAL: Failed to get DSA public key
++	   	// New message using regex above: .*(%.*?:.*):
++	   	// SSHD_[65697]: %SECURITY-SSHD-3-ERR_GENERAL: Failed to get DSA public key
++	   	$data = $cemdb->lookup($row['msg']);
++	   	// BPK - this is where the revised version begins
++		// CDUKES - BETA - FIX THIS
+ 		$printed = false;
+ 		if (CEMDB == "ON") {
+ 			$data = $cemdb->lookup($row['msg']);
+@@ -773,12 +818,6 @@
+ 		// this will prevent unnecessary popups and allow filtering via a link
+ 		if (!$printed) { 
+ 			$msg = htmlspecialchars($row['msg']);
+-			$program = htmlspecialchars($row['program']);
+-			if (!empty($program)) {
+-				$pattern = '/^'.addcslashes($program, '.()[]/\\').'/';
+-				$replacement = '<a href="'.$_SERVER['PHP_SELF'].'?excludeProgram=0&program[]='.$program.'&'.$programParamsGET.'">'.$program.'</a>';
+-				$msg = preg_replace($pattern, $replacement, $msg);
+-			}
+ 			echo "<td>";
+ 			if ($row['count'] > 1) echo '<b>'.$row['count'].' *</b> ';
+ 			echo "$msg</td>\n";
+diff -Nur -Nur html/includes/search.php html.2.9.7/includes/search.php
+--- html/includes/search.php	2008-02-28 10:41:06.000000000 -0500
++++ html.2.9.7/includes/search.php	2008-03-20 19:22:41.000000000 -0400
+@@ -130,7 +130,8 @@
+ 
+ 	// What table to use to fill in the HOST and FACILITY fields?
+   	if($mergelogtable) {
+-	   	$useTable = MERGELOGTABLE;
++	   	// $useTable = MERGELOGTABLE;
++	   	$useTable = USETABLE;
+    	}
+    	elseif($table) {
+ 	   	$useTable = $table;
+@@ -324,7 +325,7 @@
+ 	   	<table align="center" class="formentry"><tr><td>
+ 	   	Include
+ 	   	</td><td>
+-	   	<input name="excludeFacility" id="excludeFacility_0" value="0" type="radio">
++	   	<input name="excludePriority" id="excludePriority_0" value="0" type="radio">
+ 	   	</td></tr>
+ 	   	<tr><td>
+ 	   	Exclude
+@@ -483,7 +484,7 @@
+ 													   	<?php  } ?>
+ 													   	</SELECT> 
+ 														</FORM> 
+-														<?
++														<?php
+ 													  	if ( JPG_MAIN == "NOTWORKING YET" ) {
+ 														   	// Set up Graph variables
+ 														   	$slice = 0;
+diff -Nur -Nur html/includes/tailresult.php html.2.9.7/includes/tailresult.php
+--- html/includes/tailresult.php	2008-02-26 11:08:36.000000000 -0500
++++ html.2.9.7/includes/tailresult.php	2008-03-20 19:42:19.000000000 -0400
+@@ -76,6 +76,17 @@
+ }
+ /* END: Added by BPK to save search form variables info the session. */
+ 
++// Cdukes: 3/20/08 - Added below to make sure people are only tailing the default log table
++// Ref: http://code.google.com/p/php-syslog-ng/issues/detail?id=57 
++if ($table != DEFAULTLOGTABLE) {
++	echo "<br>
++		Why would you tail $table? <br>
++	   	The only table with \"live\" data in it is \"" .DEFAULTLOGTABLE ."\"<br>
++	   	Using tail on any other table would not yeild anything useful (and would probably take a really long time). <br>
++	   	<a href=\"index.php?pageId=searchform\">BACK TO SEARCH</a>";
++	die();
++}
++
+ //========================================================================
+ // BEGIN: INPUT VALIDATION
+ //========================================================================
+@@ -410,7 +421,8 @@
+ <td class="resultsheader">HOST</td>
+ <td class="resultsheader">FACILITY</td>
+ <td class="resultsheader">TIME</td>
+-<td class="resultsheader">PROGRAM MESSAGE</td>
++<td class="resultsheader">PROGRAM</td>
++<td class="resultsheader">MESSAGE</td>
+ </tr>
+ <?php
+ //------------------------------------------------------------------------
+@@ -500,10 +512,20 @@
+ 	echo '<td>';
+ 	if ($pieces[0]!=$today) {
+ 		echo $pieces[0]."&nbsp;";
++		// die("Piece 0: " .$pieces[0] ."Today: $today");
+ 	}
+ 	echo $pieces[1];
+ 	echo "</td>\n";
+ 	/* END: BPK - Some queries can extend multiple days, display the one's not equal to today */
++		echo '<td>';
++	   	$program = htmlspecialchars($row['program']);
++			if (!empty($program)) {
++				$pattern = '/^'.addcslashes($program, '.()[]/\\').'/';
++				$replacement = '<a href="'.$_SERVER['PHP_SELF'].'?excludeProgram=0&program[]='.$program.'&'.$programParamsGET.'">'.$program.'</a>';
++				$program = preg_replace($pattern, $replacement, $program);
++			}
++		echo $program;
++		echo "</td>\n";
+ 
+ 	/* BEGIN: CEMDB Mod */
+    	if(CEMDB == "ON") {
+@@ -519,50 +541,32 @@
+ 	   	// 3852752: DRP/0/0/CPU0:Feb 4 20:12:36.098 EST5: SSHD_[65697]: %SECURITY-SSHD-3-ERR_GENERAL: Failed to get DSA public key
+ 	   	// New message using regex above: .*(%.*?:.*):
+ 	   	// SSHD_[65697]: %SECURITY-SSHD-3-ERR_GENERAL: Failed to get DSA public key
+-	   	$data = $cemdb->lookup($row['msg']);
+-	   	if($data !== false) {
+-		   	$info  =     "<b>Name:</b>"                    . $data[0];
+-			$info .= "<br><b>Message:</b> "                . $data[1];
+-			$info .= "<br><b>Explanation:</b> "            . $data[2];
+-			$info .= "<br><b>Action:</b> "                 . $data[3];
+-			$info .= "<br><b>Record last updated on:</b> " . $data[4];
+-			$info = str_replace("\n", "", $info);
+-		   	$info = htmlentities($info);
+-		   	if (!get_magic_quotes_gpc()) {
+-			   	$info = stripslashes($info);
+-		   	}
+-/* BEGIN: Switched by BPK to avoid extra popups 
++		$printed = false;
++		if (CEMDB == "ON") {
++			$data = $cemdb->lookup($row['msg']);
++			if($data !== false) {
++				$info  =     "<b>Name:</b>"                    . $data[0];
++				$info .= "<br><b>Message:</b> "                . $data[1];
++				$info .= "<br><b>Explanation:</b> "            . $data[2];
++				$info .= "<br><b>Action:</b> "                 . $data[3];
++				$info .= "<br><b>Record last updated on:</b> " . $data[4];
++				$info = str_replace("\n", "", $info);
++				$info = htmlentities($info);
++				$msg = (($row['count'] > 1) ? '<b>'.$row['count'].' *</b> ' : '') . htmlspecialchars($row['msg']);
++?>				<th  align="left"><A href="#" onmouseover="overlib('<TABLE border=1 cellspacing=0 cellpadding=0 width=100%><TR><TD class=tooltip><?=$info?></TD></TR></TABLE>');" onmouseout=nd(); name ="spacer" ><? echo $msg;?></A></th>
++<?php			$printed = true;
++			}
++			
+ 		}
+-		else {
+-			$info = "No Data available for this message.";
+-		}
+-?>		<th  align="left"><A href="#" onmouseover="overlib('<TABLE border=1 cellspacing=0 cellpadding=0 width=100%><TR><TD class=tooltip><?php echo $info?></TD></TR></TABLE>');" onmouseout=nd(); name ="spacer" ><?php echo htmlspecialchars($row['msg']);?></A></th>
+-<?	}
+-*/
+-?>			<th  align="left"><A href="#" onmouseover="overlib('<TABLE border=1 cellspacing=0 cellpadding=0 width=100%><TR><TD class=tooltip><?php echo $info; ?></TD></TR></TABLE>');" onmouseout=nd(); name ="spacer" ><?php echo htmlspecialchars($row['msg']);?></A></th>
+-<?		}
+-		else {
+-			// add a link for filtering of programs
++		// if CEMDB off or row wasn't found, print it
++		// this will prevent unnecessary popups and allow filtering via a link
++		if (!$printed) { 
+ 			$msg = htmlspecialchars($row['msg']);
+-			$program = htmlspecialchars($row['program']);
+-			$pattern = '/^'.addcslashes($program, '.()[]/\\').'/';
+-			$replacement = '<a href="'.$_SERVER['PHP_SELF'].'?excludeProgram=0&program[]='.$program.'&'.$programParamsGET.'">'.$program.'</a>';
+-			$msg = preg_replace($pattern, $replacement, $msg);
+-			echo "<td>$msg</td>\n";
++			echo "<td>";
++			if ($row['count'] > 1) echo '<b>'.$row['count'].' *</b> ';
++			echo "$msg</td>\n";
+ 		}
+-	}
+-/* END: Switched by BPK to avoid extra popups */
+-	else {
+-		/* BEGIN: Added a link for filtering of programs - BPK
+-		echo "<td>".htmlspecialchars($row['msg'])."</td>";
+-		*/
+-		$msg = htmlspecialchars($row['msg']);
+-		$program = htmlspecialchars($row['program']);
+-		$pattern = '/^'.addcslashes($program, '.()[]/\\').'/';
+-		$replacement = '<a href="'.$_SERVER['PHP_SELF'].'?excludeProgram=0&program[]='.$program.'&'.$programParamsGET.'">'.$program.'</a>';
+-		$msg = preg_replace($pattern, $replacement, $msg);
+-		echo "<td>$msg</td>\n";
+-		/* END: Added a link for filtering of programs - BPK */
++
+ 	}
+ 	/* END: CEMDB Mod */
+ 
+diff -Nur -Nur html/includes/version.php html.2.9.7/includes/version.php
+--- html/includes/version.php	2008-02-28 17:33:57.000000000 -0500
++++ html.2.9.7/includes/version.php	2008-03-01 15:16:48.000000000 -0500
+@@ -26,13 +26,13 @@
+         /** @var int Main Release Level */
+         var $RELEASE = '2.9';
+         /** @var string Development Status */
+-        var $DEV_STATUS = '(Mostly) Stable';
++        var $DEV_STATUS = 'Stable';
+         /** @var int Sub Release Level */
+-        var $DEV_LEVEL = '6';
++        var $DEV_LEVEL = '7';
+         /** @var string Codename */
+         var $CODENAME = 'cdukes';
+         /** @var string Date */
+-        var $RELDATE = '29-Feb-2008';
++        var $RELDATE = '20-Mar-2008';
+         /** @var string Time */
+         var $RELTIME = '17:53';
+         /** @var string Timezone */
+diff -Nur -Nur html/index.php html.2.9.7/index.php
+--- html/index.php	2008-02-03 14:50:15.000000000 -0500
++++ html.2.9.7/index.php	2008-03-20 20:47:19.000000000 -0400
+@@ -8,10 +8,11 @@
+    	header('Location: install/');
+ } else {
+    	require_once ("config/config.php");
++   	require_once 'includes/common_funcs.php';
++   	include_once 'includes/callhome.php';
+ }
+ 
+ 
+-require_once 'includes/common_funcs.php';
+ 
+ // Added below for v2.9.4 (LDAP)
+ // session handler
+@@ -26,6 +27,7 @@
+ //------------------------------------------------------------------------
+ $pageId = get_input('pageId');
+ if(!validate_input($pageId, 'pageId') || !$pageId) {
++	echo "Error on pageId validation! <br>Check your regExpArray in config.php!\n";
+    	$pageId = "login";
+ }
+ 
+@@ -68,7 +70,14 @@
+ 	require 'includes/configure.php';
+ }
+ elseif(strcasecmp($pageId, "Tail") == 0) {
+-	$addTitle = "TAIL RESULTS";
++	// custom title for tail queries 
++	// Ref: http://code.google.com/p/php-syslog-ng/issues/detail?id=33
++   	if ($_REQUEST['title'] == '') {
++	   	$addTitle = "TAIL RESULTS";
++   	}
++   	else {
++	   	$addTitle = $_REQUEST['title'];
++   	}
+ 	require 'includes/tailresult.php';
+ }
+ elseif(strcasecmp($pageId, "Graph") == 0) {
+diff -Nur -Nur html/install/install1.php html.2.9.7/install/install1.php
+--- html/install/install1.php	2008-02-04 14:28:03.000000000 -0500
++++ html.2.9.7/install/install1.php	2008-03-20 21:20:21.000000000 -0400
+@@ -33,7 +33,7 @@
+ <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+ <html xmlns="http://www.w3.org/1999/xhtml">
+ <head>
+-<title><?=$_VERSION->PRODUCT?> - Web Installer</title>
++<title><?php echo $_VERSION->PRODUCT; ?> - Web Installer</title>
+ <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" />
+ <link rel="shortcut icon" href="../../images/favicon.ico" />
+ <link rel="stylesheet" href="install.css" type="text/css" />
+@@ -56,7 +56,7 @@
+ 		alert('Please enter a Name for your new Database');
+ 		f.DBname.focus();
+ 		formValid=false;
+-	} else if ( confirm('Are you sure these settings are correct? \n<?=$_VERSION->PRODUCT?> will now attempt to populate a Database with the settings you have supplied\n')) {
++	} else if ( confirm('Are you sure these settings are correct? \n<?php echo $_VERSION->PRODUCT; ?> will now attempt to populate a Database with the settings you have supplied\n')) {
+ 		formValid=true;
+ 	} 
+ 	return formValid;
+@@ -67,7 +67,7 @@
+ <body onload="document.form.DBhostname.focus();">
+ <div id="wrapper">
+ 	<div id="header">
+-		<div id="psng"><img src="header_install.png" alt="<?=$_VERSION->PRODUCT?> Installation" /></div>
++		<div id="psng"><img src="header_install.png" alt="<?php echo $_VERSION->PRODUCT; ?> Installation" /></div>
+ 	</div>
+ </div>
+ <div id="ctr" align="center">
+@@ -89,15 +89,15 @@
+   			<div class="clr"></div>
+   			<h1>MySQL database configuration:</h1>
+ 	  		<div class="install-text">
+-  	   			<p>Setting up <?=$_VERSION->PRODUCT?> to run on your server involves 4 simple steps...</p>
+-  	   			<p>Please enter the hostname of the server <?=$_VERSION->PRODUCT?> is to be installed on.</p>
+-				<p>Enter the MySQL username, password and database name you wish to use with <?=$_VERSION->PRODUCT?>.</p>
++  	   			<p>Setting up <?php echo $_VERSION->PRODUCT; ?> to run on your server involves 4 simple steps...</p>
++  	   			<p>Please enter the hostname of the server <?php echo $_VERSION->PRODUCT; ?> is to be installed on.</p>
++				<p>Enter the MySQL username, password and database name you wish to use with <?php echo $_VERSION->PRODUCT; ?>.</p>
+ 				   <br>
+ 				   <br>
+ 				   <br>
+ 				   <br>
+ 				   <br>
+-				<p>Enter the table name prefix (if any) to be used by this <?=$_VERSION->PRODUCT?> instance and select what
++				<p>Enter the table name prefix (if any) to be used by this <?php echo $_VERSION->PRODUCT; ?> instance and select what
+ 				   to do in case there are existing tables from former installations.</p>
+ 				   <br>
+ 				   <br>
+diff -Nur -Nur html/install/install2.php html.2.9.7/install/install2.php
+--- html/install/install2.php	2008-02-04 14:26:31.000000000 -0500
++++ html.2.9.7/install/install2.php	2008-03-20 21:20:21.000000000 -0400
+@@ -215,7 +215,7 @@
+ <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+ <html xmlns="http://www.w3.org/1999/xhtml">
+ <head>
+-<title><?=$_VERSION->PRODUCT?> - Web Installer</title>
++<title><?php echo $_VERSION->PRODUCT; ?> - Web Installer</title>
+ <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" />
+ <link rel="shortcut icon" href="../../images/favicon.ico" />
+ <link rel="stylesheet" href="install.css" type="text/css" />
+@@ -238,7 +238,7 @@
+ <body onload="document.form.sitename.focus();">
+ <div id="wrapper">
+ 	<div id="header">
+-	  <div id="psng"><img src="header_install.png" alt="<?=$_VERSION->PRODUCT?> Installation" /></div>
++	  <div id="psng"><img src="header_install.png" alt="<?php echo $_VERSION->PRODUCT; ?> Installation" /></div>
+ 	</div>
+ </div>
+ 
+@@ -273,7 +273,7 @@
+ 	  		<div id="step">step 2</div>
+   			<div class="clr"></div>
+ 
+-  			<h1>Enter the name of your <?=$_VERSION->PRODUCT?> site:</h1>
++  			<h1>Enter the name of your <?php echo $_VERSION->PRODUCT; ?> site:</h1>
+ 			<div class="install-text">
+ <?php if ($isErr) { ?>
+ 			Looks like there have been some errors with inserting data into your database!<br />
+@@ -282,7 +282,7 @@
+ 			SUCCESS!
+ 			<br/>
+ 			<br/>
+-  			Type in the name for your <?=$_VERSION->PRODUCT?> site. This
++  			Type in the name for your <?php echo $_VERSION->PRODUCT; ?> site. This
+ 			name is used in email messages so make it something meaningful.
+ <?php } ?>
+   		</div>
+@@ -309,7 +309,7 @@
+   				</tr>
+   				<tr>
+   					<td width="100">&nbsp;</td>
+-  					<td align="center" class="small">e.g. The Home of <?=$_VERSION->PRODUCT?></td>
++  					<td align="center" class="small">e.g. The Home of <?php echo $_VERSION->PRODUCT; ?></td>
+   				</tr>
+   				</table>
+ <?php
+diff -Nur -Nur html/install/install3.php html.2.9.7/install/install3.php
+--- html/install/install3.php	2006-07-13 11:40:57.000000000 -0400
++++ html.2.9.7/install/install3.php	2008-03-20 21:20:21.000000000 -0400
+@@ -56,7 +56,7 @@
+ <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+ <html xmlns="http://www.w3.org/1999/xhtml">
+ <head>
+-<title><?=$_VERSION->PRODUCT?> - Web Installer</title>
++<title><?php echo $_VERSION->PRODUCT ?> - Web Installer</title>
+ <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" />
+ <link rel="shortcut icon" href="../../images/favicon.ico" />
+ <link rel="stylesheet" href="install.css" type="text/css" />
+@@ -118,7 +118,7 @@
+ <body onload="document.form.siteUrl.focus();">
+ <div id="wrapper">
+ 	<div id="header">
+-		<div id="psng"><img src="header_install.png" alt="<?=$_VERSION->PRODUCT?> Installation" /></div>
++		<div id="psng"><img src="header_install.png" alt="<?php echo $_VERSION->PRODUCT; ?> Installation" /></div>
+ 	</div>
+ </div>
+ <div id="ctr" align="center">
+@@ -161,8 +161,8 @@
+ 				  Enter your e-mail address, this will be the e-mail address of the site
+ 				  SuperAdministrator.<br />
+ 				  <br/>
+-				  The permission settings will be used while installing <?=$_VERSION->PRODUCT?> itself, by
+-				  the <?=$_VERSION->PRODUCT?> addon-installers and by the media manager. If you are unsure
++				  The permission settings will be used while installing <?php echo $_VERSION->PRODUCT; ?> itself, by
++				  the <?php echo $_VERSION->PRODUCT; ?> addon-installers and by the media manager. If you are unsure
+ 				  what flags should be set, leave the default settings at the moment.
+ 				  You can still change these flags later in the site global configuration.</p>
+ 			</div>
+diff -Nur -Nur html/install/install4.php html.2.9.7/install/install4.php
+--- html/install/install4.php	2008-02-04 16:00:12.000000000 -0500
++++ html.2.9.7/install/install4.php	2008-03-20 21:32:36.000000000 -0400
+@@ -161,7 +161,8 @@
+ 	$config .= "define('COUNT_ROWS', TRUE);\n";
+ 	$config .= "define('DEFAULTLOGTABLE', '{$DBPrefix}logs');\n";
+ 	$config .= "define('MERGELOGTABLE', '{$DBPrefix}all_logs');\n";
+-	$config .= "define('LOGROTATERETENTION', 90);\n";
++	$config .= "define('USETABLE', DEFAULTLOGTABLE); // This tells the main page to calculate hostcount based on \"all_logs\" or \"logs\"\n";
++	$config .= "define('LOGROTATERETENTION', 30);\n";
+ 	$config .= "define('DBUSER', '$SLuserName');\n";
+ 	$config .= "define('DBUSERPW', '$SLUpassword');\n";
+ 	$config .= "define('DBADMIN', '$SLAuserName');\n";
+@@ -173,6 +174,7 @@
+ 	$config .= "define('AUTHTABLENAME', '{$DBPrefix}users');\n";
+ 	$config .= "define('RENEW_SESSION_ON_EACH_PAGE', TRUE);\n";
+ 	$config .= "define('SESSION_EXP_TIME', '3600');\n";
++	$config .= "define('TAIL_REFRESH_SECONDS', '25');\n";
+  	$config .= "define('USE_ACL', TRUE);\n";
+  	$config .= "define('USER_ACCESS_TABLE', '{$DBPrefix}user_access');\n";
+  	$config .= "define('ACTION_TABLE', '{$DBPrefix}actions');\n";
+@@ -186,22 +188,31 @@
+ 	$config .= "define('DEBUG', '0');\n";
+ 	$config .= "define('SITEURL', '$SITEURL');\n";
+  	$config .= '$regExpArray = array(
+-			"username"=>"(^\\w{4,}\$)",
++			"username"=>"(^\w{4,}\$)",
+ 			"password"=>"(^.{4,}\$)",
+-			"pageId"=>"(^\\w+$)",
+-			"sessionId"=>"(^\\w{32}\$)",
+-			"date"=>"/^yesterday$|^today$|^now$|^(\\d){4}-([01]*\\d)-([0123]*\\d)$/i",
+-			"time"=>"/^now$|^([012]*\\d):([012345]*\\d):([012345]*\\d)$/i",
+-			"limit"=>"(^\\d+$)",
++			"pageId"=>"(^\w+$)",
++			"sessionId"=>"(^\w{32}\$)",
++			"date"=>"/^yesterday$|^today$|^now$|^(\d){4}-([01]*\d)-([0123]*\d)$/i",
++			"time"=>"/^now$|^([012]*\d):([012345]*\d):([012345]*\d)$/i",
++			"limit"=>"(^\d+$)",
+ 			"topx"=>"(^\d+$)",
+-			"orderby"=>"/^seq$|^host$|^facility$|^priority$|^datetime$/i",
++			// BPK added program to orderby filter
++			"orderby"=>"/^seq$|^host$|^program$|^facility$|^priority$|^datetime$|^msg$|^fo$|^lo$|^counter$/i",
+ 			"order"=>"/^asc$|^desc$/i",
+-			"offset"=>"(^\\d+$)",
++			"offset"=>"(^\d+$)",
+ 			"collapse"=>"/^1$/",
+-			"table"=>"(^\\w+$)",
++			"table"=>"(^\w+$)",
+ 			"excludeX"=>"(^[01]$)",
+-			"host"=>"(^[\\w-.]+$)",
+-			"facility"=>"(^\\w+$)",
++			/* BEGIN: changes by BPK to allow for regexp matching, lists of hosts, and programs
++			"host"=>"(^[\w-.]+$)",
++			*/
++			"regexpX"=>"(^[01]$)",
++			"host"=>"(^([\w_.%-]+[,;]\s*)*[\w_.%-]+$)",
++			"program"=>"(^([\w/_.%-]+[,;]\s*)*[\w/_.%-]+$)",
++			"hostRegExp"=>"(^\S+$)",
++			"programRegExp"=>"(^\S+$)",
++			/* END: changes by BPK to allow for regexp matching, lists of hosts, and programs */
++			"facility"=>"(^\w+$)",
+ 			"priority"=>"/^debug$|^info$|^notice$|^warning$|^err$|^crit$|^alert$|^emerg$/i",
+ 			);';
+ 	$config .= "\n//------------------------------------------------------------------------\n";
+@@ -237,6 +248,12 @@
+ 	$config .= "define('LDAP_BASE_DN', \"ou=active, ou=employees, ou=people, o=company.com\");\n";
+ 	$config .= "// variable to search for user (container name) - in my case, this is \"uid\", but normally it is \"cn\"\n";
+ 	$config .= "define('LDAP_CN', \"uid\");\n";
++	$config .= "// if using MS Active Directory, put it to \"sAMAccountName\"\n";
++	$config .= "// define('LDAP_CN', \"sAMAccountName\");\n";
++	$config .= "// Set to Yes if using MS Active Directory for Authentication\n";
++	$config .= "define('LDAP_MSAD', \"NO\");\n";
++	$config .= "// Required when if LDAP_MSAD set to YES and using MS Active Directory, ex. mydomain.com\n";
++	$config .= "define('LDAP_DOMAIN', \"mydomain.com\");\n";
+ 	$config .= "\n";
+ 	$config .= "// privilege levels for editing records \n";
+ 	$config .= "// (not implemented yet - this will be used to define RW and RO groups from LDAP)\n";
+@@ -254,6 +271,15 @@
+ 	$config .= "// If you don't want it on the menu bar, just disable it here :-)\n";
+ 	$config .= "//------------------------------------------------------------------------\n";
+ 	$config .= "define  ('PAYPAL_ENABLE', 'YES');\n";
++	$config .= "//------------------------------------------------------------------------\n";
++	$config .= "// CDUKES - Just a simple addition for my demo site at http://php-syslog-ng.gdd.net\n";
++	$config .= "//------------------------------------------------------------------------\n";
++	$config .= "define  ('DEMO', TRUE);\n";
++	$config .= "//------------------------------------------------------------------------\n";
++	$config .= "// CDUKES -  Call home feature so I can see how many people are using this\n";
++	$config .= "// Feel free to disable this if you're overly paranoid (or don't have net access)\n";
++	$config .= "//------------------------------------------------------------------------\n";
++	$config .= "define  ('CALLHOME', TRUE);\n";
+ 	$config .= "\n?>";
+ 
+ 	if ($canWrite && ($fp = fopen("../config/config.php", "w"))) {
+@@ -411,14 +437,14 @@
+ <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+ <html xmlns="http://www.w3.org/1999/xhtml">
+ <head>
+-<title><?=$_VERSION->PRODUCT?> - Web Installer</title>
++<title><?php echo $_VERSION->PRODUCT; ?> - Web Installer</title>
+ <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" />
+ <link rel="stylesheet" href="install.css" type="text/css" />
+ </head>
+ <body>
+ <div id="wrapper">
+ 	<div id="header">
+-		<div id="psng"><img src="header_install.png" alt="<?=$_VERSION->PRODUCT?> Installation" /></div>
++		<div id="psng"><img src="header_install.png" alt="<?php echo $_VERSION->PRODUCT; ?> Installation" /></div>
+ 	</div>
+ </div>
+ <div id="ctr" align="center">
+@@ -473,7 +499,7 @@
+ ?>/>
+ 			</div>
+ 			<div class="clr"></div>
+-			<h1>Congratulations! <?=$_VERSION->PRODUCT?> is installed</h1>
++			<h1>Congratulations! <?php echo $_VERSION->PRODUCT; ?> is installed</h1>
+ 
+ 			<?php } ?>
+ 	<?php if ($CEMDB) { ?>
+@@ -482,7 +508,7 @@
+ 			</div>
+ 			<?php } else { ?>
+ 			<div class="install-text">
+-				<p>Click the "View Site" button to start <?=$_VERSION->PRODUCT?></p>
++				<p>Click the "View Site" button to start <?php echo $_VERSION->PRODUCT; ?></p>
+ 			</div>
+ 			<?php } ?>
+ 			<div class="install-form">
+diff -Nur -Nur html/install/install.php html.2.9.7/install/install.php
+--- html/install/install.php	2006-06-16 10:23:22.000000000 -0400
++++ html.2.9.7/install/install.php	2008-03-20 21:20:21.000000000 -0400
+@@ -25,7 +25,7 @@
+ <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+ <html xmlns="http://www.w3.org/1999/xhtml">
+ <head>
+-<title><?=$_VERSION->PRODUCT?> - Web Installer</title>
++<title><?php echo $_VERSION->PRODUCT; ?> - Web Installer</title>
+ <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" />
+ <link rel="shortcut icon" href="../../images/favicon.ico" />
+ <link rel="stylesheet" href="install.css" type="text/css" />
+@@ -60,7 +60,7 @@
+ <body onload="document.adminForm.next.disabled=true;">
+ <div id="wrapper">
+ 	<div id="header">
+-		<div id="psng"><img src="header_install.png" alt="<?=$_VERSION->PRODUCT?> Installation" /></div>
++		<div id="psng"><img src="header_install.png" alt="<?php echo $_VERSION->PRODUCT; ?> Installation" /></div>
+ 	</div>
+ </div>
+ <div id="ctr" align="center">
+@@ -82,8 +82,8 @@
+ 		<div class="clr"></div>
+ 		<h1>GNU/GPL License:</h1>
+ 		<div class="licensetext">
+-				<a href="https://sourceforge.net/projects/php-syslog-ng"><?=$_VERSION->PRODUCT?> </a> is Free Software released under the <a href="http://www.gnu.org/copyleft/gpl.html">GNU/GPL License </a>.
+-				<div class="error">*** To continue installing <?=$_VERSION->PRODUCT?> you must check the box under the license ***</div>
++				<a href="https://sourceforge.net/projects/php-syslog-ng"><?php echo $_VERSION->PRODUCT; ?> </a> is Free Software released under the <a href="http://www.gnu.org/copyleft/gpl.html">GNU/GPL License </a>.
++				<div class="error">*** To continue installing <?php echo $_VERSION->PRODUCT; ?> you must check the box under the license ***</div>
+ 
+ 		</div>
+ 		<div class="clr"></div>
+diff -Nur -Nur html/login.php html.2.9.7/login.php
+--- html/login.php	2008-02-25 19:27:08.000000000 -0500
++++ html.2.9.7/login.php	2008-03-20 21:00:38.000000000 -0400
+@@ -29,7 +29,19 @@
+    	$error = login_check($_POST);
+    	if (trim($error)=="") {
+ 	   	$_SESSION["member_id"] = login($_POST);
+-	   	Header("Location: " .INDEX_URL); // Redirect authenticated member
++	   	if (stristr($_SESSION["member_id"], "Invalid") == TRUE) {
++		   	die($_SESSION["member_id"] ."<br><a href=" .INDEX_URL .">Return</a>");
++	   	}
++		// Cdukes: 3/20/08: Carry post variables through login
++		// Ref: http://code.google.com/p/php-syslog-ng/issues/detail?id=35
++	   	// Header("Location: " .INDEX_URL); // Redirect authenticated member
++		$destination = INDEX_URL;
++	   	// Remember search query across login
++	   	if (!empty($_POST['searchQuery']))
++	   	{
++		   	$destination .= '?' . ($_POST['searchQuery']);
++	   	}
++	   	Header("Location: " . $destination); // Redirect authenticated member
+ 	   	exit();
+    	} else {
+ 	   	print "Error:$error";
+@@ -55,6 +67,16 @@
+    	</SCRIPT>
+ 	   	<div align="center">
+ 	   	<form method="post" action="<?php echo  $_SERVER['PHP_SELF']; ?>">
++		<?php
++		// Cdukes: 3/20/08: Carry post variables through login
++		// Ref: http://code.google.com/p/php-syslog-ng/issues/detail?id=35
++	   	// Remember search query across login
++	   	if (!empty($_SERVER['QUERY_STRING']))
++	   	{
++		   	$queryString = htmlspecialchars($_SERVER['QUERY_STRING']);
++		   	echo '<input type="hidden" name="searchQuery" value="' . $queryString . '">';
++	   	}
++   	?>
+ 	   	<div align="center">
+ 
+ 		<br><br><br><br>
+@@ -73,7 +95,11 @@
+ 	   	face="Verdana,Tahoma,Arial,sans-
+ 	   	serif" size="1" color="gray">Username:</font></td>
+ 	   	<td align="center" valign="middle">
++	   	<?php if(defined('DEMO') && DEMO == TRUE) { ?>
++	   	<input class="clear" type="text" size="15" name="username" value="demo">
++			<?php } else { ?>
+ 	   	<input class="clear" type="text" size="15" name="username">
++			<?php } ?>
+ 	   	</td>
+ 	   	</tr>
+ 	   	<tr>
+@@ -81,8 +107,11 @@
+ 	   	face="Verdana,Tahoma,Arial,sans-
+ 	   	serif" size="1" color="gray">Password:</font></td>
+ 	   	<td align="center" valign="middle">
+-	   	<input class="pass" type="password" size="15"
+-	   	name="password">
++	   	<?php if(defined('DEMO') && DEMO == TRUE) { ?>
++	   	<input class="pass" type="password" size="15" name="password" value="demo">
++			<?php } else { ?>
++	   	<input class="pass" type="password" size="15" name="password">
++			<?php } ?>
+ 	   	</td>
+ 		</tr>
+ 	   	<!-- Begin LDAP Mod -->
+@@ -110,6 +139,10 @@
+ 	   	</table>
+ 	   	<br>
+ 	   	<table width="640"><tr><td align="center">
++	   	<?php if(defined('DEMO') && DEMO == TRUE) { ?>
++	   	<font face="Verdana,Tahoma,Arial,sans-serif" size="1"
++	   	color="red">This demo system is typically running beta code, so don't be surprised if something doesn't work exactly as you expected. <br>For the latest stable version's changelog, please follow <a href="http://php-syslog-ng.gdd.net/CHANGELOG">this link</a>.
++		<?php } else { ?>
+ 	   	<font face="Verdana,Tahoma,Arial,sans-serif" size="1"
+ 	   	color="silver">This System is
+ 	   	for the use of authorized users only. Individuals using this computer system
+@@ -129,8 +162,11 @@
+ 				   	intended to
+ 				   	ensure that monitoring of user activity is not in violation of the Communications
+ 				   	Privacy Act of
+-				   	1986.</font>
+-				   	</td></tr></table>
++				   	1986.
++					<?php } ?>
++					</font>
++				   	</td></tr>
++					</table>
+ 
+ 					</div>
+ 				   	</form>
+diff -Nur -Nur scripts/dbgen.pl scripts.2.9.7/dbgen.pl
+--- scripts/dbgen.pl	2008-02-28 16:44:19.000000000 -0500
++++ scripts.2.9.7/dbgen.pl	2008-03-01 21:06:54.000000000 -0500
+@@ -234,7 +234,7 @@
+ 		my $devlist = $devicelist[$index];  
+ 		my $curr_fakeevent = get_rand_event ($eventtype);
+ 
+-		my $YMDHMS = strftime "%Y-%m-%d %H:%M:%S", gmtime;
++		my $YMDHMS = strftime "%Y-%m-%d %H:%M:%S", localtime;
+ 		my $HOST	 = "$devlist";
+ 		my $FACILITY = "$fac";
+ 		my $PRIORITY = "$pri";
+diff -Nur -Nur scripts/SqueezeDB-v1.0.php scripts.2.9.7/SqueezeDB-v1.0.php
+--- scripts/SqueezeDB-v1.0.php	2008-02-11 13:06:40.000000000 -0500
++++ scripts.2.9.7/SqueezeDB-v1.0.php	2008-03-01 03:05:30.000000000 -0500
+@@ -10,7 +10,6 @@
+  * Changelog:
+  * 2008-02-08 - created
+  * 2008-02-10 - Fixed count bug (db inserts were calculating incorrect count)
+- * 2008-02-11 - Implemented Ethan Brown's caching algorithm for large databases (better performance)
+  *
+  */
+ 
+@@ -82,23 +81,11 @@
+    Also note that one of the top issues listed is CDP Duplex (gee there's a surprise) - maybe we should go fix that host/device!
+ 
+    This is an excellent way (and much faster) to get your Top X problem children with an added benefit of trimming 85-95% of the fat off your database!
+-   */
+-
+-
+-/*
+-   $host_message_cache has the form
+-   (hostname1 => ('message1' => ('parent_seq' => seq,
+-   'child_seqs' => (seq1,seq2,...),
+-   'first_message_time' => stime,
+-   'last_message_time' => etime),
+-   'message2' => (...)
+-   )
+-   hostname2 => (...)
+-   )
+-*/
++ */
+ 
+-include_once "/www/php-syslog-ng/html/includes/common_funcs.php";
+-include_once "/www/php-syslog-ng/html/config/config.php";
++$basePath = dirname( __FILE__ );
++include_once "$basePath/../html/includes/common_funcs.php";
++include_once "$basePath/../config/config.php";
+ 
+ $time_start = get_microtime();
+ echo "\nStarting Squeeze\n";
+@@ -111,9 +98,7 @@
+ // Possible values are 1 to 99.9999999999
+ // I highly recommend NOT using 1 unless you want to lose all your data...
+ //========================================================================
+-$matchpercent = 95;
+-
+-$host_message_cache = array();
++$matchpercent = 90;
+ 
+ //------------------------------------------------------------------------
+ // Grab all rows by sequence # (the primary key) for processing
+@@ -128,115 +113,6 @@
+ 
+ $result = perform_query($query, $dbLink);
+ 
+-// Create prepare to obtain rows from database, then:
+-while ($row = fetch_array($result))	// Algorithm assumes rows are in time order
+-{
+-   	$r_host = $row['host'];
+-   	$r_message = $row['msg'];
+-   	$r_seq = $row['seq'];
+-   	$r_entry_timestamp = $row['datetime'];
+-   	$r_fo = $row['fo'];
+-	$r_lo = $row['lo'];    
+-
+-	if (array_key_exists($r_host, $host_message_cache))
+-	{
+-		// Host already in cache.  Update or create message entry.
+-		
+-		$message_found = false;
+-		$messages = $host_message_cache[$host];
+-		foreach ($messages as $message => $message_data)
+-		{
+-			// Note: similar_text should be changed to return the matchpercent,
+-			// instead of returning value by side effect. 
+-			similar_text($r_message, $message, $p);	
+-			if ($p >= $matchpercent)
+-			{
+-				// Found match in existing message set.  Update stats:
+-				$host_message_cache[$host][$message]['child_seqs'][]
+-					= $r_seq;
+-				$host_message_cache[$host][$message]['last_message_time']
+-					= $r_lo ? $r_lo : $r_entry_timestamp;
+-
+-				$message_found = true;
+-				break;
+-			}
+-		}
+-		
+-		if (!$message_found)
+-		{
+-			// Found not match in existing message set.  Create new entry.
+-			$message_info = array('parent_seq' => $r_seq,
+-					      'child_seqs' => array(),
+-					      'first_message_time' => $r_entry_timestamp,
+-					      'last_message_time' => $r_lo ? $r_lo : $r_entry_timestamp);
+-			$host_message_cache[$host][$r_message] = $message_info;
+-		}
+-	}
+-	else
+-	{
+-		// Host didn't exist in cache, so create an entry for it
+-
+-		$message_info = array('parent_seq' => $r_seq,
+-				      'child_seqs' => array(),
+-				      'first_message_time' => $r_entry_timestamp,
+-				      'last_message_time' => $r_lo ? $r_lo : $r_entry_timestamp);
+-		$host_message_cache[$r_host][$r_message] = $message_info;
+-		
+-	}
+-}
+-
+-// We now have all of the information in the $host_message_cache.  Loop over
+-// each message for each host and modify the database accordingly by
+-// updating the message parent row's stats and deleting child rows.
+-
+-$dbLink->begin_transaction();	// Probably wont do anything since people use the toy MySQL database...
+-foreach ($host_message_cache as $host => $messages)
+-{
+-	foreach ($messages as $message => $message_data)
+-	{
+-		if (!$message_data['child_seqs'])
+-			continue; // Solitary message with no associations.
+-
+-
+-		$count = count($message_data['child_seqs']) + 1; // Children + parent
+-		$fo = $message_data['first_message_time'];
+- 		$lo = $message_data['last_message_time'];
+-		$parent_seq = $message_data['parent_seq'];
+-		$query = "UPDATE LOGTABLE SET counter = $count, fo = '$fo', lo = '$lo' WHERE seq = '$parent_seq'";
+-
+-		// Update the parent record to reflect count and start, end times.
+-		if (! perform_query($query, $dbLink)) // Assuming that your perform_query returns false on error
+-		{
+-			$dbLink->rollback();
+-			die("Error: Update failed.");
+-		}
+-
+-		// Delete all the child records.
+-
+-		// Create a set of SQL IN lists (e.g. "('seq1', 'seq2',...).  You
+-		// need a set because there can be limits of 255 IN list members.
+-		$in_lists = make_sql_in_lists($message_data['child_seqs']);
+-		foreach ($in_lists as $in_list)
+-		{
+-			$query = "DELETE FROM LOGTABLE WHERE seq IN $in_list";
+-			if (! perform_query($query, $dbLink)) // Assuming that your perform_query returns false on error
+-			{
+-				$dbLink->rollback();
+-				die("Error: Delete failed.");
+-			}
+-		}
+-	}
+-}
+-
+-
+-$dbLink->commit();
+-
+-
+-
+-
+-
+-
+-
+ 
+ //------------------------------------------------------------------------
+ // Get row count
+@@ -303,7 +179,7 @@
+ 	   	// Now we're going to start a 3rd loop inside loop 2 to compare the rows from loops 2 and 3
+ 	   	// Remember that we're in a loop(1) of the current SEQ, so exclude that from the search
+ 	   	//------------------------------------------------------------------------
+-	   	$query3 = "SELECT * from " .DEFAULTLOGTABLE ." WHERE seq NOT in ('" .$row2['seq'] ."')ORDER BY seq ASC";
++	   	$query3 = "SELECT * from " .DEFAULTLOGTABLE ." WHERE seq NOT in ('" .$row2['seq'] ."') AND host in ('" .$row2['host'] ."') ORDER BY seq ASC";
+ 	   	$results3 = perform_query($query3, $dbLink);
+ 	   	while($row3 = fetch_array($results3)) {
+ 		   	//------------------------------------------------------------------------
+@@ -367,8 +243,9 @@
+ echo "Ending Row Count = $num_rows_after\n";
+ echo "Cleaned $savings records saving $savings_p percent\n";
+ $time_end = get_microtime();
+-$exetime = $time_end - $time_start;
+-echo "Squeeze finished in ".$exetime." seconds\n";
++$exetime = round($time_end - $time_start, 2);
++$mps = round($num_rows/$exetime, 2);
++echo "Squeeze finished in ".$exetime." seconds ($mps MPS)\n";
+ //========================================================================
+ // END
+ //========================================================================
+diff -Nur -Nur scripts/SqueezeDB-v2.0.php scripts.2.9.7/SqueezeDB-v2.0.php
+--- scripts/SqueezeDB-v2.0.php	1969-12-31 19:00:00.000000000 -0500
++++ scripts.2.9.7/SqueezeDB-v2.0.php	2008-03-05 01:06:26.000000000 -0500
+@@ -0,0 +1,385 @@
++<?php
++/*
++ * squeezedb.php
++ *
++ * Developed by Clayton Dukes <cdukes@cdukes.com>
++ * Copyright (c) 2008 http://nms.gdd.net
++ * Licensed under terms of GNU General Public License.
++ * All rights reserved.
++ *
++ * Changelog:
++ * 2008-02-08 - created
++ * 2008-02-10 - Fixed count bug (db inserts were calculating incorrect count)
++ *
++ * Ethan's RCS log:
++ *
++ *  $Log: SqueezeDB-v2.0.php,v $
++ *  Revision 1.3  2008/03/01 06:13:04  ethan
++ *  Implemented database transaction functions.  Lowered $matchpercent from 95 to 90.
++ *
++ *  Revision 1.2  2008/03/01 02:58:10  ethan
++ *  Modified matching strings to include hostname like Clayton's
++ *  original algorithm.
++ *
++ *  Revision 1.1  2008/03/01 01:02:32  ethan
++ *  Initial revision
++ *
++ *
++ */
++
++/*
++   NOTE: Versions of php-syslog-ng 2.9.5d and below will need to alter the database to use this script
++   ALTER TABLE logs ADD counter INT NOT NULL DEFAULT 1;
++   ALTER TABLE logs ADD fo datetime default NULL;
++   ALTER TABLE logs ADD lo datetime default NULL;
++
++   Basic Usage:
++   $s = "/USR/SBIN/CRON[10749]: (root) CMD (php /www/php-syslog-ng/scripts/reloadcache.php >> /var/log/php-syslog-ng/reloadcache.log)";
++   $s2 = "/USR/SBIN/CRON[10849]: (root) CMD (php /www/php-syslog-ng/scripts/reloadcache.php >> /var/log/php-syslog-ng/reloadcache.log)";
++   similar_text($s, $s2, $p);
++   echo "Percent: $p%";
++
++   Description:
++   This calculates the similarity between two strings as described in Oliver [1993]. 
++   Note that this implementation does not use a stack as in Oliver's pseudo code, but 
++   recursive calls which may or may not speed up the whole process. Note also that the 
++   complexity of this algorithm is O(N**3) where N is the length of the longest string.
++   
++   Once a match is made, the source row is updated with a "count" of the destination (compared to) row.
++   It also logs the "first occurance" and "last occurance" of the message so that you can get an idea
++   of how long the message has been repeating.
++
++   Why is this useful?
++   Running this script makes a HUGE difference on the amount of data you have to store, and subsequently, search through
++   to get to what you really want - an answer to the # 1 question for most customers: Where are my problem children?
++
++   Example:
++   When tested on a smaller database, I get the following results:
++   // Starting Row Count = 12832
++   // Ending Row Count = 1770
++   // Cleaned 11062 records saving 86 percent
++   // Squeeze finished in 1318.39662099 seconds (9.7 MPS)
++   (note: I hope to get this script to run faster/more efficiently in the future, if you have ideas, please let me know!)
++   (note2: The amount of time it takes to run may vary greatly for you based on hardware 
++   - it will take a long time on the first run, but subsequent runs should improve markedly.
++   Update for v2.0 Script:
++   Starting Row Count = 4271
++   Ending Row Count = 170
++   Cleaned 4101 records saving 96 percent
++   Squeeze finished in 2.07 seconds (2063.29 MPS)
++
++   Now, we can quickly pull valuable data from the (much smaller!) databse by doing:
++   (this will show the top 10 "problem" children")
++   mysql> SELECT host,counter,msg from logs WHERE counter>1 ORDER BY counter DESC limit 10;
++
++   +--------+---------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
++   | host    | counter | msg
++   +--------+---------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
++   | host-a |     668 | 466927:         If Cisco determines that your insertion of non-Cisco memory, WIC cards,
++   |
++   | host-b |     644 | 466928:         AIM cards, Network Modules, SPA cards, GBICs or other modules into a
++   |
++   | host-c |     614 | 466925:         The module in slot 4 in this router may not be a genuine Cisco product.
++   |
++   | host-d |     585 | 466926:         Cisco warranties and support programs only apply to genuine Cisco products.
++   |
++   | host-e |     572 | 466929:         Cisco product is the cause of a support issue, Cisco may deny support under
++   |
++   | host-f |     385 | 466930:         your warranty or under a Cisco support program such as SmartNet.
++   |
++   | host-g |     215 | 467114:         your warranty or under a Cisco support program such as SmartNet.
++   |
++   | host-h |     165 | 32574: %CDP-4-DUPLEX_MISMATCH: duplex mismatch discovered on FastEthernet1/26 (not full duplex), with 7200-3 FastEthernet1/0 (full duplex).  
++   |
++   | host-i |     133 | /USR/SBIN/CRON[2858]: (root) CMD (php /www/php-syslog-ng/scripts/reloadcache.php >> /var/log/php-syslog-ng/reloadcache.log)
++   |
++   | host-j |     133 | /USR/SBIN/CRON[2861]: (root) CMD (php /www/rtpnml-xray/htdocs/cacti/poller.php > /dev/null 2>&1)
++   |
++   +--------+---------+---------------------------------------------------------------------------------------------------------------------------------------------------+
++   10 rows in set (0.01 sec)
++
++   As you can see, most of the "spammy" messages are useless and could easily be ignored or deleted (and definitely shouldn't be taking up so many rows!)
++   Also note that one of the top issues listed is CDP Duplex (gee there's a surprise) - maybe we should go fix that host/device!
++
++   This is an excellent way (and much faster) to get your Top X problem children with an added benefit of trimming 85-95% of the fat off your database!"
++*/
++
++$max_sql_in_list_count = 255;
++
++include_once "/www/php-syslog-ng/html/includes/common_funcs.php";
++include_once "/www/php-syslog-ng/html/config/config.php";
++
++
++$time_start = get_microtime();
++echo "\nStarting Squeeze\n";
++
++// Open connection to DB
++$dbLink = db_connect_syslog(DBADMIN, DBADMINPW);
++
++//========================================================================
++// START: Set level to match on
++// Possible values are 1 to 99.9999999999
++// I highly recommend NOT using 1 unless you want to lose all your data...
++//========================================================================
++
++// Original value in Clayton's code (things go much faster at 90):
++#$matchpercent = 95;
++$matchpercent = 90;
++
++//------------------------------------------------------------------------
++// Grab all rows by sequence # (the primary key) for processing
++//------------------------------------------------------------------------
++// if(defined('COUNT_ROWS') && COUNT_ROWS == TRUE) {
++//    	$query = "SELECT SQL_CALC_FOUND_ROWS seq from " .DEFAULTLOGTABLE ." ORDER BY seq ASC";
++// }
++// else {
++//    	$query = "SELECT seq from " . DEFAULTLOGTABLE . " ORDER BY seq ASC";
++// }
++
++$query = "SELECT * from " . DEFAULTLOGTABLE . " ORDER BY seq ASC";
++
++
++
++$result = perform_query($query, $dbLink);
++
++//------------------------------------------------------------------------
++// Get row count
++//------------------------------------------------------------------------
++if(defined('COUNT_ROWS') && COUNT_ROWS == TRUE) {
++	$num_results_array = perform_query("SELECT FOUND_ROWS()", $dbLink);
++   	$num_results_array = fetch_array($num_results_array);
++   	$num_rows = $num_results_array[0];
++} else {
++   	$num_rows = mysql_num_rows($result);
++}
++echo "$num_rows total rows to process\n";
++
++
++
++//------------------------------------------------------------------------
++// Begin outer loop
++// Loop through each record and collect information in a multi-dimensional
++// associative array keyed by host.
++//------------------------------------------------------------------------
++$exact_matches = 0;
++$similar_matches = 0;
++$rowcnt = 1;
++error_reporting(E_ALL);
++$host_message_cache = array();
++while ($row = fetch_array($result))
++{
++   	//print_r($row); exit();
++   	$r_host = $row['host'];
++   	$r_message = $row['msg'];
++   	$r_seq = $row['seq'];
++   	$r_entry_timestamp = $row['datetime'];
++   	$r_fo = $row['fo'];
++   	$r_lo = $row['lo'];   
++
++	if (array_key_exists($r_host, $host_message_cache))
++   	{
++	   	// Host already in cache.  Update or create message entry.
++
++		$message_found = false;
++	   	$messages = $host_message_cache[$r_host];
++
++		// First check for exact match (on key value).  Otherwise, do the
++	   	// similar_text() (expensive) check.
++
++		if (array_key_exists($r_message, $host_message_cache[$r_host]))
++	   	{
++		   	// Found match in existing message set.  Update stats:
++		   	$host_message_cache[$r_host][$r_message]['child_seqs'][]
++			   	= $r_seq;
++		   	$host_message_cache[$r_host][$r_message]['last_message_time']
++			   	= $r_lo ? $r_lo : $r_entry_timestamp;
++		   	$message_found = true;
++		   	$exact_matches++;
++	   	}
++	   	else
++	   	{
++		   	foreach ($messages as $message => $message_data)
++		   	{
++			   	// Note: similar_text should be changed to return the matchpercent,
++			   	// instead of returning value by side effect.
++			  	//   (The host . message concatenation is done for consistency
++			   	//    with Clayton's original algorithm).
++			  	similar_text($r_host . $r_message, $r_host .$message, $p);	
++				if ($p >= $matchpercent)
++			   	{
++				   	// Found match in existing message set.  Update stats:
++				   	$host_message_cache[$r_host][$message]['child_seqs'][]
++					   	= $r_seq;
++				   	$host_message_cache[$r_host][$message]['last_message_time']
++					   	= $r_lo ? $r_lo : $r_entry_timestamp;
++
++					$message_found = true;
++				   	$similar_matches++;
++				   	break;
++			   	}
++		   	}
++	   	}
++	   	if (!$message_found)
++	   	{
++		   	// Found not match in existing message set.  Create new entry.
++		  	$message_info = array('parent_seq' => $r_seq,
++				   	'child_seqs' => array(),
++				   	'first_message_time' => $r_entry_timestamp,
++				   	'last_message_time' => $r_lo ? $r_lo : $r_entry_timestamp);
++		   	$host_message_cache[$r_host][$r_message] = $message_info;
++	   	}
++   	}
++   	else
++   	{
++	   	// Host didn't exist in cache, so create an entry for it
++
++		$message_info = array('parent_seq' => $r_seq,
++			   	'child_seqs' => array(),
++			   	'first_message_time' => $r_entry_timestamp,
++			   	'last_message_time' => $r_lo ? $r_lo : $r_entry_timestamp);
++	   	$host_message_cache[$r_host][$r_message] = $message_info;
++
++	}
++
++	if (($rowcnt++ % 100 == 0))
++   	{
++	   	//   		print_r($host_message_cache);
++	   	//   		exit();
++	   	print ' . ';
++   	}
++
++}
++
++#print_r ($host_message_cache); exit;
++
++// We now have all of the information in the $host_message_cache.  Loop over
++// each message for each host and modify the database accordingly by
++// updating the message parent row's stats and deleting child rows.
++
++// We are doing a lot of database modification.  It should all be part of the same transaction.
++
++print "\n\n";
++print "Debug: Log table analysis complete.\n";
++print "Debug: Exact log message matches: $exact_matches\n";
++print "Debug: Similar log message matches: $similar_matches\n";
++
++
++print "Debug: Starting log table modifications...\n";
++$db_time_start = get_microtime();
++
++begin_transaction($dbLink);
++foreach ($host_message_cache as $host => $messages)
++{
++   	foreach ($messages as $message => $message_data)
++   	{
++	   	if (!$message_data['child_seqs'])
++		   	continue; // Solitary message with no associations.
++
++
++		$count = count($message_data['child_seqs']) + 1; // Children + parent
++	   	$fo = $message_data['first_message_time'];
++	   	$lo = $message_data['last_message_time'];
++	   	$parent_seq = $message_data['parent_seq'];
++	   	$query = "UPDATE " . DEFAULTLOGTABLE . "  SET counter = $count, fo = '$fo', lo = '$lo' WHERE seq = '$parent_seq'";
++
++		// Update the parent record to reflect count and start, end times.
++	  	if (! perform_query($query, $dbLink)) // Assuming that your perform_query returns false on error
++	   	{
++		   	rollback($dbLink);
++		   	die("Error: Update failed.");
++	   	}
++
++		// Delete all the child records.
++
++		// Create a set of SQL IN lists (e.g. "('seq1', 'seq2',...).  You
++	   	// need a set because there can be limits of 255 IN list members.
++	  	$lists = array_chunk($message_data['child_seqs'], $max_sql_in_list_count);
++	   	foreach ($lists as $list)
++	   	{
++		   	$in_list = create_sql_in_list($list);
++		   	$query = "DELETE FROM " . DEFAULTLOGTABLE . " WHERE seq IN $in_list";
++		   	if (! perform_query($query, $dbLink)) // Assuming that your perform_query returns false on error
++		   	{
++			   	rollback($dbLink);
++			   	die("Error: Delete failed.");
++		   	}
++	   	}
++   	}
++}
++
++commit($dbLink);
++
++$dbsecs = get_microtime() - $db_time_start;
++print "Debug: Log table modifications complete in $dbsecs seconds...\n";
++
++//------------------------------------------------------------------------
++// Gather and spit out some stats
++//------------------------------------------------------------------------
++
++$query = 'SELECT count(*) AS "count" from ' . DEFAULTLOGTABLE ;
++$result = perform_query($query, $dbLink);
++$row = fetch_array($result);
++$num_rows_after = $row['count'];
++$savings = $num_rows - $num_rows_after;
++$savings_p = round( ($savings/$num_rows)*100, 0 );
++echo "\nStarting Row Count = $num_rows\n";
++echo "Ending Row Count = $num_rows_after\n";
++echo "Cleaned $savings records saving $savings_p percent\n";
++$time_end = get_microtime();
++$exetime = round($time_end - $time_start, 2);
++$mps = round($num_rows/$exetime, 2);
++echo "Squeeze finished in ".$exetime." seconds ($mps MPS)\n";
++//========================================================================
++// END
++//========================================================================
++
++///// Functions (should probably be put in include file common functions
++
++/**
++ * Create an SQL in list '(val1,val2,...,valn)' from an array.  If any
++ * elements are not numeric, treat all as characters.
++ * One may also use the $force_string arg to force a string type.
++ */
++function create_sql_in_list($vals, $force_string = false)
++{
++   	$is_str = array_filter($vals,
++		   	create_function('$val', 'return (! is_numeric($val));'));
++
++	$is_str = $is_str || $force_string;
++   	$res = '(';
++   	$sep = '';
++   	foreach ($vals as $val)
++   	{
++	   	$res .= $sep;
++	   	if ($is_str)
++		   	$res .= "'";
++	   	$res .= $val;
++	   	if ($is_str)
++		   	$res .= "'";
++	   	$sep = ',';
++   	}
++   	$res .= ')';
++   	return $res;
++}
++
++/**
++ * Database transaction functions.
++ *
++ *  
++ */
++
++function begin_transaction($dbLink)
++{
++   	mysql_query('begin');
++}
++
++function rollback($dbLink)
++{
++   	mysql_query('rollback');
++}
++
++function commit($dbLink)
++{
++   	mysql_query('commit');
++}
++?>

@@ -1,0 +1,56 @@
+diff -Nur -Nur html/config/config.php html.2.9.5d/config/config.php
+--- html/config/config.php	2008-02-05 20:30:26.000000000 -0500
++++ html.2.9.5d/config/config.php	2008-02-05 20:48:59.000000000 -0500
+@@ -1,5 +1,6 @@
+ <?php
+ define('PAGETITLE', 'Php-Syslog-NG' );
++define('VERSION', '2.9.5c');
+ define('COUNT_ROWS', TRUE);
+ define('DEFAULTLOGTABLE', 'logs');
+ define('MERGELOGTABLE', 'all_logs');
+@@ -97,4 +98,4 @@
+ //------------------------------------------------------------------------
+ define  ('PAYPAL_ENABLE', 'YES');
+ 
+-?>
++?>
+\ No newline at end of file
+diff -Nur -Nur html/includes/common_funcs.php html.2.9.5d/includes/common_funcs.php
+--- html/includes/common_funcs.php	2008-02-05 15:09:20.000000000 -0500
++++ html.2.9.5d/includes/common_funcs.php	2008-02-05 20:52:07.000000000 -0500
+@@ -3,8 +3,8 @@
+ // Copyright (C) 2005 Claus Lund, clauslund@gmail.com
+ // Copyright (C) 2006 Clayton Dukes, cdukes@cdukes.com
+ 
+-#$basePath = dirname( __FILE__ );
+-#include_once ($basePath ."config.php");
++$basePath = dirname( __FILE__ );
++include_once ($basePath ."/../config/config.php");
+ 
+ error_reporting(E_ALL & ~E_NOTICE);
+ //------------------------------------------------------------------------
+diff -Nur -Nur html/includes/google-analytics.html html.2.9.5d/includes/google-analytics.html
+--- html/includes/google-analytics.html	2008-02-05 20:30:26.000000000 -0500
++++ html.2.9.5d/includes/google-analytics.html	2008-02-05 20:29:26.000000000 -0500
+@@ -1,7 +1 @@
+-<script src="http://www.google-analytics.com/urchin.js" type="text/javascript">
+-</script>
+-<script type="text/javascript">
+-_uacct = "UA-1162837-1";
+-urchinTracker();
+-</script>
+ 
+--- scripts/reloadcache.php.old	2007-04-23 09:12:10.000000000 -0400
++++ scripts/reloadcache.php	2008-02-05 20:55:42.000000000 -0500
+@@ -4,9 +4,8 @@
+ echo "\nStarting to reload cache\n";
+ echo date("Y-m-d H:i:s")."\n\n";
+ 
+-$basePath = dirname( __FILE__ );
+-require "$basePath/../html/includes/common_funcs.php";
+-require "$basePath/../html/config/config.php";
++require_once "../html/includes/common_funcs.php";
++require_once "../html/config/config.php";
+ 
+ $dbLink = db_connect_syslog(DBUSER, DBUSERPW);
+ 

@@ -1,0 +1,10 @@
+# PHP-Syslog-NG
+@daily php /www/php-syslog-ng/scripts/logrotate.php >> /var/log/php-syslog-ng/logrotate.log 
+@daily find /www/php-syslog-ng/html/jpcache/ -atime 1 -exec rm -f '{}' ';' 
+0,5,10,15,20,25,30,35,40,45,50,55 * * * * php /www/php-syslog-ng/scripts/reloadcache.php >> /var/log/php-syslog-ng/reloadcache.log
+# Removed below as of v2.9.4
+# @reboot /www/php-syslog-ng/scripts/syslog2mysql.sh >> /var/log/php-syslog-ng/mysql.log 2>&1
+
+# Demo PHP-Syslog-NG
+# CHANGE TO MATCH YOUR DIRECTORY PATHS
+# @hourly /www/php-syslog-ng/scripts/dbgen.pl >> /var/log/php-syslog-ng/dbgen.log

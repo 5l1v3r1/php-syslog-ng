@@ -1,0 +1,156 @@
+--- html.2.9.3l/includes/CEMDB.class.php	2007-09-10 20:54:28.000000000 -0400
++++ html/includes/CEMDB.class.php	2007-12-02 17:40:40.000000000 -0500
+@@ -54,7 +54,10 @@
+ 	// Extract the error name from the message string
+ 	//------------------------------------------------------------------------
+ 	private function extractName($message) {
+-		preg_match_all("/(%.*):/", $message, $matches);
++		// Modified below to match search criteria for new CEMDB data
++		// Note that ALL incoming messages must meet this search in order to elicit a DB lookup
++		// Example Message: %SYS-5-CONFIG: meets criteria since it has the two delimiters (% and :)
++		preg_match_all("/(%.*?:).*/", $message, $matches);
+ 
+ 		if(! isset($matches[1][0]))
+ 			return "";
+--- html.2.9.3l/INSTALL-STEPS	2007-09-04 22:09:18.000000000 -0400
++++ html/INSTALL-STEPS	2007-12-02 19:05:51.000000000 -0500
+@@ -1,4 +1,4 @@
+-Easy as 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20 :-)
++Easy as 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19 :-)
+ 
+ ##############################
+ # Step 1
+@@ -129,7 +129,7 @@
+ cd /www/php-syslog-ng/scripts
+ 
+ ##############################
+-# Step 14
++# Step 14 (OPTIONAL - only use if you installed in a different path than me)
+ ##############################
+ Update all files with the correct path for your install using perl:
+ perl -i -pe 's/\/www\/php-syslog-ng/<new_path>/g' *
+@@ -163,39 +163,39 @@
+ ##############################
+ # Step 17
+ ##############################
+-Add syslog-ng.conf entries (example file is in scripts/syslog.conf):
+-# Add the following to /etc/syslog-ng/syslog-ng.conf (or wherever the conf file is located on your system)
+-# pipe messages to /var/log/mysql.pipe to be processed by mysql
+-
+-destination d_mysql {
+-        pipe("/var/log/mysql.pipe"
+-                template("INSERT INTO logs
+-                (host, facility, priority, level, tag, datetime, program, msg)
+-                VALUES ( '$HOST', '$FACILITY', '$PRIORITY', '$LEVEL', '$TAG', '$YEAR-$MONTH-$DAY $HOUR:$MIN:$SEC',
+-                '$PROGRAM', '$MSG' );\n") template-escape(yes));
++# Add syslog-ng.conf entries (example file is in scripts/syslog.conf):
++# Add the following to /etc/syslog-ng/syslog-ng.conf (or wherever the
++# conf file is located on your system)
++# This method replaces the old way of using file pipes
++# and inserts the data directly into mysql
++#
++# Many thanks to Michael_Baecker (michael@baecker.com) for this!
++# http://www.baecker.com/linux/syslog-ng-in-mysql-datenbank-loggen.html
++
++options {
++        chain_hostnames(off);
++        sync(0);
++        stats(43200);
+ };
+ 
+-log {
+-        source(s_all);
+-        destination(d_mysql);
+-};
+-
+-
+-##############################
+-# Step 18
+-##############################
+-either reboot or just start syslog2mysql:
+-/www/php-syslog-ng/scripts/syslog2mysql.sh >> /var/log/php-syslog-ng/mysql.log 2>&1 &
++source s_everything { internal(); pipe("/proc/kmsg"); unix-stream("/dev/log"); udp(); };
+ 
+-##############################
+-# Step 19
+-##############################
+-restart syslog-ng
+-/etc/init.d/syslog-ng restart
++destination d_mysql {
++    program("/usr/bin/mysql -usyslogadmin -psyslogadmin syslog"
++    template("INSERT INTO logs (host, facility, priority, level, tag, datetime, program, msg)
++    VALUES ( '$HOST', '$FACILITY', '$PRIORITY', '$LEVEL', '$TAG', '$YEAR-$MONTH-$DAY $HOUR:$MIN:$SEC', '$PROGRAM', '$MSG' );\n")
++    template-escape(yes));
++    };
+ 
++log {
++    source(s_everything);
++    destination(d_mysql);
++    };
+ 
+ ##############################
+-# Step 20
++# Step 18 - OPTIONAL, you only need to use this for testing!
++# I use this to put events into the database, it will help verify that
++# php-syslog-ng is processing events properly without the need for syslog-ng.
+ ##############################
+ Generate a few fake events to verify that the php-syslog-ng part works:
+ 
+@@ -216,7 +216,7 @@
+ http://<url>
+ 
+ ##############################
+-# Step 21
++# Step 19
+ ##############################
+ Profit! ;-)
+ 
+--- html.2.9.3l/CHANGELOG	2007-09-20 00:29:35.000000000 -0400
++++ html/CHANGELOG	2007-12-02 19:14:28.000000000 -0500
+@@ -1,4 +1,30 @@
+ CHANGELOG
++2.9.4
++* New and improved CEMDB (yay!)
++- Added note in troubleshooting doc about setting magic quotes to "on"
++- Updated CEMDB with new data (about twice as many messages now!)
++- Note that this required a change to the CEMDB.class.php file!
++- added the "upgrades/" directory so folks could just patch to new versions. 
++  (note that you will need to manually install the new CEMDB if you use this method,
++  it's located in html/install/sql/cemdb.sql)
++  To manually install the new CEMDB:
++  1. Backup old sql:
++  mysqldump syslog cemdb > cemdb.old.sql
++  2. Delete old data from database:
++  echo "delete from cemdb" | mysql -usyslogadmin -psyslogadmin syslog
++  3. Import new data:
++  mysql syslog < html/install/sql/cemdb.sql
++  4. Apply upgrade patch:
++  patch -p0 < upgrades/2.9.3l_to_2.9.4.patch
++  # That should do it, if not, you may need to just re-run the install by zeroing out your config.php file
++- Made changes to the way syslog-ng stores its data into mysql (changing the syslog-ng.conf file)
++- Thanks go to Michael Baeker for this one!
++- Reference: http://www.baecker.com/linux/syslog-ng-in-mysql-datenbank-loggen.html
++- These changes no longer require the use of pipes so you'll want to remove:
++  "@reboot /www/php-syslog-ng/scripts/syslog2mysql.sh >> /var/log/php-syslog-ng/mysql.log 2>&1"
++  From your crontab file (crontab -e to edit the file) after making the changes to syslog-ng.conf.
++  Be sure to replace the username and password in the new syslog-ng.conf with the proper credentials.
++
+ 2.9.3l
+ * Various fixes
+ - Added chk_config to index.php to redirect to install screen if config.php is missing settings
+--- html.2.9.3l/includes/tailresult.php	2007-09-10 21:35:24.000000000 -0400
++++ html/includes/tailresult.php	2007-12-02 17:36:58.000000000 -0500
+@@ -296,6 +296,13 @@
+ 
+ 	/* BEGIN: CEMDB Mod */
+ 	if(CEMDB == "ON") {
++		// Added below to remove whitespace between delimiters (% and :)
++		// example:
++		// "%SYS-5-CONFIG :" is now
++		// "%SYS-5-CONFIG:"
++		$row['msg'] = preg_replace('/\s:/', ':', $row['msg']);
++		//
++
+ 		$data = $cemdb->lookup($row['msg']);
+ 		if($data !== false) {
+ 			$info  =     "<b>Name:</b>"                    . $data[0];

@@ -1,0 +1,1 @@
+SELECT DISTINCT program FROM all_logs WHERE LENGTH(program)<80 AND program RLIKE '^[a-zA-Z]+[a-zA-Z0-9/()._\-]+$';

@@ -1,0 +1,142 @@
+diff -Nur -Nur html.2.9.5a/CHANGELOG html.2.9.5b/CHANGELOG
+--- html.2.9.5a/CHANGELOG	2008-02-04 16:48:17.000000000 -0500
++++ html.2.9.5b/CHANGELOG	2008-02-05 16:02:46.000000000 -0500
+@@ -1,4 +1,22 @@
+ CHANGELOG
++2.9.5b
++* Minor fixes
++- Fixed Issue 36 (logrotate errors) http://code.google.com/p/php-syslog-ng/issues/detail?id=36
++  note that you need to re-grant priveleges (GRANT ALL PRIVILEGES on syslog.* to syslogadmin@'%';) to fix this.
++- Removed include from common_funcs for config.php and moved it to login.php
++  it was messing up the reloadcache.php
++- Fixed issue #45 (unable to use "ACL = FALSE" in config.php)
++  http://code.google.com/p/php-syslog-ng/issues/detail?id=45
++
++
++2.9.5a
++* Minor fixes
++- Added a .htaccess file to check for proper php global settings 
++- note that you must set "AllowOverride All" in your apache config to allow .htaccess to work.
++- Modified the regex match for cemdb stuff in tailresult and 
++  regularresult on incoming syslog messages to make it look better
++- removed a couple of old files
++
+ 2.9.5
+ * Lots of code changes
+ - Sorry...no upgrade for this one...I screwed up and used 2.9.3l as the base :-)
+diff -Nur -Nur html.2.9.5a/includes/common_funcs.php html.2.9.5b/includes/common_funcs.php
+--- html.2.9.5a/includes/common_funcs.php	2008-02-04 16:17:28.000000000 -0500
++++ html.2.9.5b/includes/common_funcs.php	2008-02-05 15:09:20.000000000 -0500
+@@ -3,7 +3,9 @@
+ // Copyright (C) 2005 Claus Lund, clauslund@gmail.com
+ // Copyright (C) 2006 Clayton Dukes, cdukes@cdukes.com
+ 
+-include_once ("config/config.php");
++#$basePath = dirname( __FILE__ );
++#include_once ($basePath ."config.php");
++
+ error_reporting(E_ALL & ~E_NOTICE);
+ //------------------------------------------------------------------------
+ // This function returns the current microtime.
+@@ -227,7 +229,7 @@
+ 		$result = mysql_query($query, $link) or die('Query failed: ' . mysql_error());
+ 	}
+ 	else {
+-		die('Error in perform_query function: No DB link' .mysql_error());
++		die("Error in perform_query function<br> No DB link for query: $query<br>Mysql_error: " .mysql_error());
+ 	}
+ 
+ 	return $result;
+diff -Nur -Nur html.2.9.5a/includes/google-analytics.html html.2.9.5b/includes/google-analytics.html
+--- html.2.9.5a/includes/google-analytics.html	2008-02-04 21:04:52.000000000 -0500
++++ html.2.9.5b/includes/google-analytics.html	2008-02-04 21:06:34.000000000 -0500
+@@ -1 +1,7 @@
++<script src="http://www.google-analytics.com/urchin.js" type="text/javascript">
++</script>
++<script type="text/javascript">
++_uacct = "UA-1162837-1";
++urchinTracker();
++</script>
+ 
+diff -Nur -Nur html.2.9.5a/includes/html_header.php html.2.9.5b/includes/html_header.php
+--- html.2.9.5a/includes/html_header.php	2008-02-04 11:29:23.000000000 -0500
++++ html.2.9.5b/includes/html_header.php	2008-02-05 16:01:15.000000000 -0500
+@@ -118,7 +118,7 @@
+ </table>
+ <table class="headerbottom"><tr><td>
+ <?php
+-if(secure() == $_SESSION["member_id"]) {
++if((secure() == $_SESSION["member_id"]) && (USE_ACL == 'TRUE' || USE_ACL == 'YES' ))  {
+ 	echo "<a class=\"vertmenu\" href=\"index.php?pageId=logout\">Logout</a>";
+ 	echo "<a class=\"vertmenu\" href=\"index.php?pageId=searchform\">Search</a>";
+ 	echo "<a class=\"vertmenu\" href=\"index.php?pageId=config\">Config</a>";
+@@ -151,8 +151,43 @@
+ 	}
+ 	// End Paypal Addition
+    	echo "&nbsp;</td></tr>";
+-	echo "</table><center>\n";
+-} else {
++   	echo "</table><center>\n";
++
++// cdukes - Added below for non ACL systems (open access)
++} elseif(!defined('USE_ACL') || !USE_ACL || !defined('REQUIRE_AUTH') || !REQUIRE_AUTH) {
++	echo "<a class=\"vertmenu\" href=\"index.php?pageId=searchform\">Search</a>";
++   	echo "<a class=\"vertmenu\" href=\"index.php?pageId=help\">Help</a>\n";
++   	echo "<a class=\"vertmenu\" href=\"index.php?pageId=about\">About</a>\n";
++	// Begin Paypal Addition
++	if (PAYPAL_ENABLE == "YES") {
++   	echo "&nbsp;<td align=\"right\">";
++	?>
++		<!-- Begin Paypal link -->
++	<form action="https://www.paypal.com/cgi-bin/webscr" method="post">
++		<input type="hidden" name="cmd" value="_donations">
++		<input type="hidden" name="business" value="cdukes@cdukes.com">
++		<input type="hidden" name="item_name" value="PHP-Syslog-NG">
++		<input type="hidden" name="no_shipping" value="0">
++		<input type="hidden" name="no_note" value="1">
++		<input type="hidden" name="currency_code" value="USD">
++		<input type="hidden" name="tax" value="0">
++		<input type="hidden" name="lc" value="US">
++		<input type="hidden" name="bn" value="PP-DonationsBF">
++		<input type="image" src="https://www.paypal.com/en_US/i/btn/btn_donate_SM.gif" border="0" name="submit" alt="Donate to a good cause :-)">
++		<div align="right">
++		Every time you donate...<br>
++		God decides not to kill a kitten :-)
++		</div>
++		<img alt="" border="0" src="https://www.paypal.com/en_US/i/scr/pixel.gif" width="1" height="1">
++		</form>
++		<!-- END Paypal link -->
++		<?php
++	}
++	// End Paypal Addition
++   	echo "&nbsp;</td></tr>";
++   	echo "</table><center>\n";
++
++} else { // basic user (using authentication, but not logged in)
+ 	echo "<a class=\"vertmenu\" href=\"index.php?pageId=login\">Login</a>";
+    	echo "<a class=\"vertmenu\" href=\"index.php?pageId=help\">Help</a>\n";
+    	echo "<a class=\"vertmenu\" href=\"index.php?pageId=about\">About</a>\n";
+Binary files html.2.9.5a/jpcache/Top10-1202177795.png and html.2.9.5b/jpcache/Top10-1202177795.png differ
+diff -Nur -Nur html.2.9.5a/login.php html.2.9.5b/login.php
+--- html.2.9.5a/login.php	2008-02-04 16:06:37.000000000 -0500
++++ html.2.9.5b/login.php	2008-02-05 15:46:29.000000000 -0500
+@@ -12,8 +12,19 @@
+  */
+ 
+ session_start();
++include_once ("config/config.php");
+ include_once ("includes/common_funcs.php");
+ 
++// If Access system is not used, then skip all this - i.e. Open system
++if(!defined('USE_ACL') || !USE_ACL || !defined('REQUIRE_AUTH') || !REQUIRE_AUTH) {
++   	$_SESSION["member_id"] = "NoACL_localuser";
++	$_SESSION["username"] = "NoACL_localuser";
++   	$sessionId = md5(mt_rand());
++   	$_SESSION["pageId"] = "searchform" ;
++   	Header("Location: " .INDEX_URL); // Redirect authenticated member
++   	exit();
++}
++
+ if ($_POST) {
+    	$error = login_check($_POST);
+    	if (trim($error)=="") {

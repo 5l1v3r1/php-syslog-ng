@@ -1,0 +1,4 @@
+### incremental upgrades between versions ##
+# These patches are here to let people just apply changes between versions instead of re-installing
+# to use, just type:
+patch -p0 < filename.patch
