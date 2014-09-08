@@ -373,7 +373,7 @@ if($date) {
    	elseif(strcasecmp($time, 'now') == 0) {
 	   	$time = date("H:i:s");
    	}
-	list($month, $day, $year) = split('[/.-]', $date);
+	list($month, $day, $year) = explode('[/.-]', $date);
 	if (preg_match("/(\d){4}/i", "$year")) {
    	$datetime = $year ."-" .$month ."-" .$day ." ".$time ;
 	} else {
@@ -394,7 +394,7 @@ if($date2) {
    	elseif(strcasecmp($time2, 'now') == 0) {
 	   	$time2 = date("H:i:s");
    	}
-	list($month2, $day2, $year2) = split('[/.-]', $date2);
+	list($month2, $day2, $year2) = explode('[/.-]', $date2);
 	if (preg_match("/(\d){4}/i", "$year2")) {
    	$datetime2 = $year2 ."-" .$month2 ."-" .$day2 ." ".$time2 ;
 	} else {
@@ -682,7 +682,7 @@ if (count($result_array)){
 		   	$color = "darker";
 	   	}
 	   	echo "<tr class=\"$color\">";
-		list($id) = split(':', $row['msg']);
+		list($id) = explode(':', $row['msg']);
 	   	if(is_numeric($id)) {
 	   	echo "<td>".$id."</td>";
 		} else {
